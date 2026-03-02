@@ -1,0 +1,12 @@
+{
+	"recommendations": [
+		"James-Yu.latex-workshop",
+		"GitHub.copilot",
+		// Remove the line below if you do not want live collaboration
+		"ms-vsliveshare.vsliveshare",
+		// Uncomment the line below if you want LanguageTool support
+		// "valentjn.vscode-ltex",
+		// Remove the line below if you do not want Grammarly
+		"znck.grammarly"
+	]
+}
