@@ -1,10 +1,8 @@
 \addcontentsline{toc}{chapter}{INTRODUCTION}
 \chapter*{INTRODUCTION}
 
-Disclaimer: This template is not an official reference;
-there might be mistakes.
-If you find any inconsistencies, go on and share updates to this template (e.g. pull requests).
-Only through combined efforts will we be able to achieve the perfect template
-that the advisers will finally be happy with.
+Most computer interaction assumes a stable desk and a surface-based pointing device. In many real situations like presentations, classrooms, mobile work, or standing use, a mouse or touchpad is inconvenient or uncomfortable, and long sessions can also cause fatigue. These limitations motivate surface-independent pointing, where cursor control is achieved through mid-air motion rather than contact with a desk.
 
+AirGlove is a wearable air-mouse prototype that explores this approach using accessible, low-cost components. Hand motion is captured by an inertial measurement unit (IMU) and translated into cursor movement and click actions, enabling basic computer control without a flat surface. The prototype uses an ESP32 microcontroller paired with an MPU6050/MPU6500 IMU and communicates with a host device as a Bluetooth Human Interface Device (HID). Beyond the hardware, the main challenge is achieving stable and usable cursor control despite noise, drift, and user variability, which requires an end-to-end processing pipeline (sensor fusion, smoothing and filtering, dead zones, gain shaping, and clutching).
 
+This report defines the problem and constraints of mid-air pointing, motivates the selected design, and documents the current prototype. Chapter~1 (Problem Definition \& Analysis) outlines objectives and limitations. Chapter~2 (Domain Analysis) reviews research and commercial solutions to extract practical design lessons. Chapter~3 (Proposed Solution) describes the system architecture and interaction pipeline. Chapter~4 (Comparative Analysis) positions AirGlove using a SWOT analysis and structured comparison table. Chapter~5 (Target Audience \& Stakeholders) connects technical choices to realistic use cases and highlights future improvement directions. Appendices provide supporting material referenced throughout the report.

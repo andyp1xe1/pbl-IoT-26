@@ -1,0 +1,179 @@
+\appendixchapter{Comparative Analysis}
+\label{appendix:comparative_table}
+
+\begin{table}[H]
+\caption{SWOT Analysis of the Proposed Air Mouse Glove}
+\label{tbl:swot}
+\begin{tabularx}{\textwidth}{|Y|Y|}
+\hline
+\textbf{Strengths} & \textbf{Weaknesses} \\
+\hline
+\begin{itemize}[leftmargin=*, labelsep=0.4em]
+    \item The glove-style design of the product can feel more comfortable and natural for pointing or clicking compared to a traditional remote, especially for presenters and lecturers;
+    \item The hardware components, particularly the ESP32 and MPU6050/6500 sensors, are widely available and reasonably priced compared to commercial wearables;
+    \item Similar to an air mouse, the glove benefits from the fact that no desk surface is needed. Midair cursor control is a popular use case for presentations and media control \cite{youtube_airmouse_demo,cornell_airmouse_project};
+    \item Many commercial air mice rely on 2.4~GHz communication with a USB receiver \cite{airmouse_y10l,amazon_imouse_p30}, whereas the proposed solution is designed to operate primarily as a Bluetooth HID device, improving portability. A 2.4 GHz alternative remains a potential extension when Bluetooth compatibility or latency becomes a constraint.
+\end{itemize}
+&
+\begin{itemize}[leftmargin=*, labelsep=0.4em]
+    \item The MPU6050 sensor (gyroscope and accelerometer) is prone to drift, increasing calibration complexity \cite{gesture_hci_research}. Stable cursor control requires filtering, calibration routines, and careful mapping to screen movement;
+    \item Users may require an adaptation period to learn how the device functions (special movements for scrolling, zooming, etc.);
+    \item Ergonomics and comfort, such as glove fit, heat, weight distribution, and sensor placement, strongly influence user experience. An uncomfortable device is unlikely to be adopted;
+    \item Wearable devices must be reliable in terms of battery life, which remains a common concern among commercial air mouse products.
+\end{itemize}
+\\
+\hline
+\textbf{Opportunities} & \textbf{Threats} \\
+\hline
+\begin{itemize}[leftmargin=*, labelsep=0.4em]
+    \item A clear market gap exists, as users frequently complain about the air mouse experience, describing commercial remotes as cheap or inconsistent \cite{reddit_airmouse_discussion};
+    \item Existing demand for air mice (presenter remotes, laser pointers) indicates market interest and validates the use case;
+    \item Wearable midair control solutions can support users who struggle with traditional mice or trackpads, improving accessibility and ergonomic interaction \cite{acm_airmouse_interface,arxiv_gesture_recognition};
+    \item Existing features such as gestures (zoom, scroll), pause mode, and programmable buttons can be further enhanced in the proposed design \cite{gesture_market}.
+\end{itemize}
+&
+\begin{itemize}[leftmargin=*, labelsep=0.4em]
+    \item Cheaper commercial alternatives already exist (e.g., approximately 170~Lei for G10S and 349~MDL for C120 in Moldova \cite{antena_airmouse,mshop_airmouse_c120}), making price competition challenging;
+    \item Many commercial devices use newer IMUs and optimized firmware, which may provide smoother calibration than an early-stage prototype;
+    \item Users have high expectations for precision; shaky, overly sensitive, or laggy cursor behavior can lead to poor user adoption;
+    \item Ecosystem compatibility represents a risk, as differences in operating systems and Bluetooth stack implementations may result in inconsistent behavior.
+\end{itemize}
+\\
+\hline
+\end{tabularx}
+\end{table}
+
+
+
+
+
+
+
+
+
+\small
+\renewcommand{\arraystretch}{1.25}
+\rowcolors{2}{gray!8}{white}
+
+\begin{longtable}{|p{2.9cm}|p{2.35cm}|p{2.35cm}|p{2.35cm}|p{2.35cm}|p{2.35cm}|}
+\caption{Comparative Analysis of Existing Solutions and the Proposed Air Mouse Glove}
+\label{tbl:comparative_air_mouse} \\
+\hline
+\rowcolor{gray!20}
+\textbf{Criterion} &
+\textbf{Presenter Air Mouse (Y-10L)\cite{airmouse_y10l}} &
+\textbf{Commercial Air Mouse (G10S / C120)\cite{antena_airmouse,mshop_airmouse_c120}} &
+\textbf{Wearable Concepts (Ion, Bellcos)\cite{ergonomic_airmouse_glove,bellcos_wireless_mouse}} &
+\textbf{Research / DIY Glove Projects\cite{cornell_airmouse_project,youtube_airmouse_demo}} &
+\textbf{Proposed Air Mouse Glove (ESP32 + MPU6050/6500)} \\
+\hline
+\endfirsthead
+
+\hline
+\rowcolor{gray!20}
+\textbf{Criterion} &
+\textbf{Presenter Air Mouse (Y-10L)} &
+\textbf{Commercial Air Mouse} &
+\textbf{Wearable Concepts} &
+\textbf{Research / DIY Projects} &
+\textbf{Proposed Air Mouse Glove} \\
+\hline
+\endhead
+
+\textbf{Form Factor / Wearability} &
+Handheld presenter with buttons and trackball &
+Handheld remote &
+Wearable glove or partial glove &
+Full glove or prototype wearable &
+Wearable glove \\
+\hline
+
+\textbf{Interaction Method} &
+Trackball + buttons &
+Tilt-based motion + buttons &
+Hand motion and gestures &
+Hand motion, gestures &
+Hand motion, gestures, buttons \\
+\hline
+
+\textbf{Sensor Technology} &
+Optical + inertial sensors &
+IMU (gyro + accelerometer) &
+IMU-based motion tracking &
+IMU (gyro + accel) &
+MPU6050 / MPU6500 IMU \\
+\hline
+
+\textbf{Connectivity Method} &
+2.4~GHz USB receiver &
+2.4~GHz USB receiver &
+Wireless (varies) &
+Wired or wireless (custom) &
+Bluetooth HID (ESP32) — primary (2.4 GHz optional variant) \\
+\hline
+
+\textbf{Precision \& Stability} &
+Medium--high (trackball assisted) &
+Medium (often jittery) &
+Variable, experimental &
+Variable, algorithm-dependent &
+Tunable via filtering \& sensor fusion \\
+\hline
+
+\textbf{Calibration \& Algorithms} &
+Factory-calibrated &
+Minimal or automatic &
+Limited or experimental &
+Custom filtering \& calibration &
+Complementary/ Kalman filters, calibration routines \\
+\hline
+
+\textbf{Ease of Use / Learning Curve} &
+Easy, intuitive &
+Moderate &
+Moderate to high &
+High (technical setup) &
+Moderate \\
+\hline
+
+\textbf{Portability} &
+Requires USB dongle &
+Requires USB dongle &
+Wireless, device-dependent &
+Limited &
+High (no dongle required) \\
+\hline
+
+\textbf{Target Use Case} &
+Presentations, lectures &
+Media control, HTPC &
+Experimental / niche use &
+Academic research &
+Presentations, accessibility, research \\
+\hline
+
+\textbf{Cost / Availability} &
+Commercial, mid-range price &
+Commercial, low cost &
+Rare / discontinued &
+Not commercial &
+Low-cost prototype \\
+\hline
+
+\textbf{Battery Life / Power} &
+USB-powered / internal battery (varies by model) &
+Often limited ($\sim$8--12~h reported); common user complaint &
+Not specified / device-dependent &
+External power &
+Dependent on ESP32 LiPo configuration; optimisable via deep-sleep modes \\
+\hline
+
+\textbf{Open-Source / Customisability} &
+Closed, proprietary firmware &
+Closed, proprietary firmware &
+Limited / undocumented &
+Fully open; firmware adjustable &
+Fully open; ESP32 Arduino/IDF ecosystem with open-source libraries \\
+\hline
+
+\end{longtable}
