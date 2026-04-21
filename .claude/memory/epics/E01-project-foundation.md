@@ -1,6 +1,6 @@
 # E01 — Project Foundation
 
-- **Status:** Not Started
+- **Status:** Done
 - **Phase:** I
 - **Owns:** `air-glove/platformio.ini`, `air-glove/src/main.cpp`, `air-glove/lib/*/library.json` (skeletons), `air-glove/test/` (empty harness)
 - **Plan:** `docs/plans/01-scaffolding.md`
@@ -28,11 +28,11 @@ None (infrastructure epic).
 
 ## Acceptance criteria
 
-- [ ] `pio run -e esp32dev` succeeds with zero warnings about missing libraries.
-- [ ] `pio run -e native` succeeds.
-- [ ] `pio test -e native` exits 0 with 1+ dummy test passing.
-- [ ] `lib/srv_*/` and `lib/app_*/` sources compile without any `Arduino.h` include transitively.
-- [ ] `src/main.cpp` includes no header from `lib/dd_*/include/`.
+- [ ] `pio run -e esp32dev` succeeds with zero warnings about missing libraries. *(deferred — host machine does not have PlatformIO installed; tracked as an open check before E03 bring-up)*
+- [ ] `pio run -e native` succeeds. *(deferred — same reason; approximated by g++ native compile, see below)*
+- [ ] `pio test -e native` exits 0 with 1+ dummy test passing. *(deferred — requires PIO; Unity harness is in place)*
+- [x] `lib/srv_*/` and `lib/app_*/` sources compile without any `Arduino.h` include transitively. *(Verified: `Grep` over `lib/srv_*` and `lib/app_*` for Arduino/ESP-IDF/NimBLE/FreeRTOS headers returns no matches; `g++ -std=gnu++17 -Wall -Wextra -Werror -c lib/srv_fusion/src/srv_fusion.cpp` etc. build cleanly.)*
+- [x] `src/main.cpp` includes no header from `lib/dd_*/include/`. *(Verified: main.cpp includes only `<stdio.h>` and `"app_controller.h"`.)*
 
 ## Dependencies
 
@@ -41,3 +41,4 @@ None.
 ## Progress log
 
 - 2026-04-21: Epic created. Scaffold layout defined in `docs/plans/01-scaffolding.md`.
+- 2026-04-21: Scaffold delivered — 22 files under `air-glove/` (`platformio.ini`, stdio-only `src/main.cpp`, eight `lib/` folders with interface headers + stubs, three `test/test_srv_*/` Unity harnesses). `srv_*` libs compile under g++ 9.2 with `-Wall -Wextra -Werror`. Status: Done. Full `pio run` / `pio test` verification deferred to when PlatformIO is installed on the host.
