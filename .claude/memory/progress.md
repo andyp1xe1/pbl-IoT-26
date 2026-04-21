@@ -1,6 +1,6 @@
 # Air Glove — Progress Dashboard
 
-Last updated: 2026-04-21 (E01 + E02 closed; E03 implementation landed, on-target test pending)
+Last updated: 2026-04-21 (E01 + E02 closed; E03 + E04 implementation landed, on-target tests pending)
 
 Legend: `Not Started` · `In Progress` · `Blocked` · `Done` · `Backlog` (not yet promoted to active planning).
 
@@ -11,7 +11,7 @@ Legend: `Not Started` · `In Progress` · `Blocked` · `Done` · `Backlog` (not 
 | E01 | Project Foundation | Done | 100 | — | `docs/plans/01-scaffolding.md` | 2026-04-21 | Scaffold delivered; `pio run` / `pio test` verification deferred until PlatformIO is installed on the host |
 | E02 | HW Abstraction Layer | Done | 100 | — | `docs/plans/01-scaffolding.md` | 2026-04-21 | All four public headers compile stand-alone `-Werror` in C11 + C++17; contract comments added |
 | E03 | IMU Driver (dd_mpu6050) | In Progress | 80 | — | `docs/plans/02-dd-mpu6050.md` | 2026-04-21 | Driver + regs + on-target Unity suite landed; shim compile clean; `pio test -e esp32dev -f test_dd_mpu6050` on real hardware is the remaining gate |
-| E04 | Touch Driver (dd_touch) | Not Started | 0 | — | `docs/plans/03-dd-touch.md` | 2026-04-21 | T0/T2/T3/T4 channels, thresholds |
+| E04 | Touch Driver (dd_touch) | In Progress | 80 | — | `docs/plans/03-dd-touch.md` | 2026-04-21 | Driver + 6-test Unity suite landed; shim compile clean; `pio test -e esp32dev -f test_dd_touch` on real hardware is the remaining gate |
 | E05 | BLE HID Driver (dd_ble_hid) | Not Started | 0 | — | `docs/plans/04-dd-ble-hid.md` | 2026-04-21 | NimBLE, HID mouse profile, reconnect |
 | E06 | Sensor Fusion Service (srv_fusion) | Not Started | 0 | — | `docs/plans/05-srv-fusion.md` | 2026-04-21 | Madgwick @ 100 Hz |
 | E07 | Motion Mapping (srv_motion) | Not Started | 0 | — | `docs/plans/06-srv-motion.md` | 2026-04-21 | Rate-control, dead-zone, gain |
