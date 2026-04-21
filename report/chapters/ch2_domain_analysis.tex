@@ -1,0 +1,70 @@
+\section{Domain Analysis}
+
+Pointing is a fundamental interaction primitive in graphical user interfaces, and even small efficiency gains can have a large cumulative usability impact because the action is repeated continuously in everyday computing. Traditional surface-based mice convert planar hand translation into stable cursor displacement with minimal drift, while touchpads and trackballs trade precision for compactness or portability. Air mice relocate pointing into free space: users rotate or move a handheld device and software maps that motion to cursor control. This shift changes both engineering constraints and human factors. Without a mechanical surface, orientation and motion must be inferred from noisy embedded sensors, and the user must sustain a mid-air posture that can become fatiguing over longer sessions.
+
+ 
+
+\subsection{Domain Scope, Positioning, and Modality Trade-offs}
+
+Air-mouse systems lie at the intersection of embedded sensing, control filtering, interaction design, and ergonomic evaluation. Any analysis in this domain must begin by acknowledging that the performance target is still set by conventional desktop pointing devices. Foundational comparative studies established the superior accuracy-speed balance of the mouse relative to rate-controlled alternatives~\cite{card1978evaluation}. Later methodological work in HCI and ergonomics provided standardized ways to evaluate non-keyboard devices through movement-time/error trade-offs and throughput-driven interpretation aligned with ISO-style test paradigms~\cite{iso9241_9_2000}. Therefore, the question is not whether air pointing can function technically; it is whether it can deliver stable, predictable, low-effort control under realistic constraints.
+
+From a systems perspective, contemporary air-pointing technologies are commonly grouped into three modality families. The first is inertial tracking, where an embedded IMU provides angular-rate and acceleration data used for estimating orientation and generating cursor commands. The second is vision-based tracking, where cameras infer hand pose or device pose from image features. The third is infrastructure-assisted tracking, where external hardware such as optical markers, base stations, or dedicated emitters provides absolute spatial references. Each family solves a different subset of problems while introducing its own constraints.
+
+Inertial tracking is the most suitable choice for low-cost Arduino-class projects because it is self-contained and does not require environmental setup. It supports mobile operation and rapid prototyping with affordable hardware. Its core challenge is drift and zero-state instability, especially over longer sessions. Vision-based tracking can provide strong absolute information in controlled settings, but performance is sensitive to lighting, occlusion, background complexity, camera placement, and host compute. Infrastructure-assisted systems can be highly accurate and drift-resistant, but they are less appropriate for compact educational or consumer prototypes due to setup complexity and cost.
+
+For this project context, inertial sensing best matches the design objective: a self-contained, low-cost, embedded artifact that can emulate a standard pointing device. The Arduino ecosystem directly supports HID mouse behavior on compatible boards through the Mouse API~\cite{arduino_mouse_reference}, while BLE-HID implementation patterns for wireless scenarios are documented in embedded vendor ecosystems~\cite{nordic_hids_mouse_sample}. This availability allows the project to focus on meaningful domain problems (fusion quality, control mapping, and usability metrics) instead of spending disproportionate effort on external infrastructure.
+
+A second positioning point concerns scientific defensibility. In educational prototypes, it is common to prioritize ``it works'' demonstrations, but that is insufficient for a rigorous domain chapter. A proper state-of-the-art analysis must connect technological feasibility to measurable user-level quality: stability at rest, correction latency, click reliability, and endurance under repeated use. This requirement motivates both the engineering decisions and the structure of the evaluation framework later in this chapter.
+
+\subsection{Inertial Sensing, Sensor Fusion, and Robust Cursor Behavior}
+
+An IMU does not directly provide orientation in a form suitable for cursor control. It provides raw measurements with different dynamics and error sources. The gyroscope provides angular velocity with high short-term responsiveness but accumulates integration error and bias over time. The accelerometer captures gravity and linear acceleration simultaneously, which makes tilt correction possible but only under assumptions about motion dynamics. If a magnetometer is available, yaw estimation can be constrained using Earth's magnetic field, but local magnetic disturbances, hard-iron/soft-iron effects, and imperfect calibration can degrade reliability.
+
+These characteristics make sensor fusion mandatory rather than optional. Embedded implementations frequently use Madgwick- and Mahony-class methods because they offer a practical compromise between numerical stability and computational efficiency~\cite{madgwick2010efficient,mahony2008nonlinear}. In this domain, algorithm choice is not an abstract theoretical preference: it directly determines whether control feels stable enough for target acquisition and selection. On constrained boards, fusion also interacts with sampling-rate consistency, loop timing jitter, and available floating-point performance, which means implementation discipline is as important as formula selection.
+
+A common misconception in early prototypes is that ``better absolute orientation'' automatically produces better pointing. In practice, user-perceived control quality depends on the full control chain: sampling, filtering, mapping, dead-zone logic, gain shaping, click handling, and clutching. Residual bias that seems numerically small can still produce visible cursor creep at rest. Likewise, aggressive smoothing that reduces jitter can introduce lag that harms corrective aiming. Therefore, the appropriate design objective is not perfect reconstruction of orientation; it is robust cursor behavior under unavoidable sensor imperfections.
+
+Rate-control mapping is often preferred for low-cost inertial devices because it converts rotational motion into cursor velocity and tends to be more tolerant to residual orientation drift. Position-style mappings can feel direct in short tests but may amplify slow drift, require frequent re-centering, and create instability when users attempt fine correction near targets. In rate control, properly tuned dead zones and nonlinear gains can reduce jitter while preserving coarse movement speed and fine-target adjustability.
+
+Another critical robustness mechanism is clutching. Since mid-air posture is finite and users cannot rotate indefinitely without discomfort, a temporary disengagement control is needed to reset neutral orientation and reposition the hand. Physical clutch inputs generally provide lower false-trigger rates than gesture-only clutching and improve user trust during precision tasks. This is particularly important in tasks that combine pointing and clicking, where accidental movement during activation can dominate perceived quality even when movement-time metrics look acceptable.
+
+Human factors must also remain embedded in the technical argument. Mid-air interaction can increase upper-limb effort over time, especially when movement amplitude is large or sustained activity is required~\cite{purdue2017gorillaarm}. Consequently, control strategies should minimize unnecessary motion, keep high-gain behavior predictable, and support short ``rest-reset'' cycles through clutching. In this sense, fusion and mapping are not only signal-processing concerns; they are ergonomic control tools.
+
+Finally, robustness should be interpreted longitudinally. A prototype may behave well in a short scripted demo but degrade over longer sessions due to temperature drift, hand fatigue, or adaptation effects. Domain-appropriate design therefore requires evaluating repeated trials and varied target conditions rather than relying on single-pass demonstrations. This perspective supports parameter decisions that generalize across users and contexts.
+
+\subsection{Evaluation Framework, Compact Visual Evidence, and Requirement Mapping}
+
+A defensible evaluation protocol should compare the air-mouse prototype against at least one conventional baseline (e.g., a standard mouse or trackpad) under repeatable target-acquisition tasks. The core metric set should combine movement time, error rate, throughput, clutch frequency, unintended activations, and user-reported effort~\cite{soukoreff2004towards}. This balanced set reduces the risk of over-optimizing only one indicator (for example speed) while ignoring practical quality factors such as stability during click confirmation.
+
+Throughput remains an important summary indicator, but it should not be interpreted in isolation. Throughput changes with task geometry, index of difficulty, adaptation time, and device gain settings. A lower throughput value may still correspond to acceptable practical usability in contexts where portability and surface independence are primary requirements. Conversely, a higher value can mask elevated effort or unstable activation behavior. For this reason, the figure below is used as contextual motivation, not as a complete judgment.
+
+
+
+To translate domain findings into implementation work, requirements must be explicit and test-linked. As summarized in Table~\ref{tbl:domain_requirements}, the key relationships between observed domain risks and concrete engineering responses define the minimum viable design envelope for the prototype. The visual scale is intentionally compact so it supports discussion without dominating page layout.
+
+\begin{table}[!htb]
+\centering
+\footnotesize
+\caption{Domain Findings to Engineering Requirements Mapping}
+\label{tbl:domain_requirements}
+\begin{tabularx}{0.86\textwidth}{|Y|Y|Y|}
+\hline
+\textbf{Domain finding} & \textbf{Risk if ignored} & \textbf{Requirement for prototype} \\
+\hline
+IMU drift is unavoidable in low-cost sensors & Cursor creeps at rest; poor trust & Include fusion + dead zone + zero-bias calibration workflow \\
+\hline
+Rate/position mapping has different failure modes & Unstable or fatiguing control & Start with rate control and expose tunable gain parameters \\
+\hline
+Mid-air use increases fatigue over time & Good short tasks but poor prolonged usability & Add clutch button and low-amplitude operating posture \\
+\hline
+Click instability degrades perceived quality rapidly & Usability collapse despite acceptable movement speed & Prioritize physical click input before gesture-click extensions \\
+\hline
+Evaluation must be comparable across devices & Results remain anecdotal and weakly generalizable & Use Fitts-based trials with error and comfort reporting \\
+\hline
+Embedded resources are limited on Arduino-class boards & Missed deadlines and timing jitter in control loop & Use lightweight fusion with fixed-period update loop \\
+\hline
+\end{tabularx}
+\normalsize
+\end{table}
+
+This mapping is used as a bridge to implementation and testing chapters: each requirement corresponds to firmware parameters, interaction logic, and evaluation procedures that can be validated experimentally. In summary, the domain evidence supports a concrete design direction: inertial tracking as primary modality, computationally bounded quaternion-based fusion, rate-control mapping with clutch-enabled recentering, and multi-metric evaluation that includes both performance and effort. This transforms the project from a simple ``cursor from IMU'' demonstration into a measurable HCI artifact with clear engineering rationale.

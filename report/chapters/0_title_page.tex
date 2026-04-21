@@ -1,35 +1,50 @@
-\newcommand{\ministryname}{Ministry of Education, Culture and Research of Republic of Moldova}
+\newcommand{\ministryname}{MINISTRY OF EDUCATION AND RESEARCH OF THE REPUBLIC OF MOLDOVA}
 \newcommand{\universityname}{Technical University of Moldova}
-\newcommand{\facultyname}{Faculty of Computers, Informatics and Microelectronics}
-\newcommand{\departmentname}{Department of Software Engineering and Automatics}
-\newcommand{\reporttitle}{}
+\newcommand{\facultyname}{Faculty of Computers, Informatics, and Microelectronics}
+\newcommand{\departmentname}{Department of Software Engineering}
+\newcommand{\reporttitle}{Internet of Things}
+\newcommand{\reportsubtitle}{Wearable Inertial Gesture Interface for Surface-Independent Computer Control}
 \newcommand{\reportyear}{2026}
 
 \begin{titlepage}
     \centering
-    \textsc{\ministryname} \\
-    \textsc{\universityname} \\
-    \textsc{\facultyname} \\
-    \textsc{\departmentname} \\
+
+    % Ministry: bold, 12pt, tight line spacing (spacing -1 = single)
+    {\fontsize{12pt}{12pt}\selectfont\bfseries \ministryname \\[4pt]}
+
+    % University / Faculty / Department: bold, 14pt, tight line spacing
+    {\fontsize{14pt}{14pt}\selectfont\bfseries
+        \universityname \\[2pt]
+        \facultyname \\[2pt]
+        \departmentname \\
+    }
 
     \vfill
 
-    {\LARGE \reporttitle \par}
-    {\LARGE Project report \par}
+    % Report title: bold, 20pt, centered
+    {\fontsize{20pt}{22pt}\selectfont\bfseries \reporttitle \par}
+
+    \vspace{10pt}
+
+    % Report subtitle: bold, 16pt, centered
+    {\fontsize{16pt}{18pt}\selectfont\bfseries \reportsubtitle \par}
 
     \vfill
 
+    % Students / Coordinator block: bold, 12pt, right-aligned
     \hfill
-    \begin{tabular}{lr}
-        \textbf{Mentor:}   & prof. Malîi Antonela \\
-        \textbf{Students:} & Chicu Andrei (FAF-233) \\
-                           & Cobzari Ion (FAF-233) \\
-                           & Crudu Alexandra (FAF-233) \\
-                           & Gurduza Mihai (FAF-233) \\
-                           & Moraru Patricia (FAF-233) \\
+    \begin{tabular}{ll}
+        \textbf{Students:}    & \textbf{Chicu Andrei, FAF-233} \\
+                              & \textbf{Cobzari Ion, FAF-233} \\
+                              & \textbf{Crudu Alexandra, FAF-233} \\
+                              & \textbf{Gurduza Mihai, FAF-233} \\
+                              & \textbf{Moraru Patricia, FAF-233} \\[12pt]
+        \textbf{Coordinator:} & \textbf{Malîi Antonela, university assistant} \\
     \end{tabular}
 
     \vfill
 
-    {Chișinău, \reportyear \par}
+    % City and year: bold, 12pt, centered
+    {\fontsize{12pt}{14pt}\selectfont\bfseries Chișinău, \reportyear \par}
+
 \end{titlepage}

@@ -2,11 +2,34 @@
 
 \addbibresource{references.bib}
 
+% Table packages for comparative analysis tables
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{colortbl}
+\usepackage[table]{xcolor}
+\usepackage{makecell}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{pgf-pie}
+\usepackage{caption}
+
+\captionsetup[figure]{labelsep=space}
+\captionsetup[table]{labelsep=space}
+\pgfplotsset{compat=1.18}
+
+% Define Y only if not already provided by the class
+\makeatletter
+\@ifundefined{NC@find@Y}{\newcolumntype{Y}{>{\raggedright\arraybackslash}X}}{}
+\makeatother
+
 % \usepackage{showframe}    % DEBUG: Show margins & frames
 
 
 \begin{document}
 
+\hypersetup{pageanchor=false}
 
 \include{chapters/0_title_page}
 \include{chapters/1_abstract}
@@ -28,24 +51,31 @@
 \addcontentsline{toc}{chapter}{\listtablename}
 \listoftables 
 
-\include{chapters/ch0_introduction}
-\include{chapters/ch1_domain_analysis}
-\include{chapters/ch2_requirements}
-\include{chapters/ch3_system_design}
-\include{chapters/ch4_implementation}
-\include{chapters/ch5_conclusion}
+\hypersetup{pageanchor=true}
 
+\include{chapters/ch0_introduction}
+\input{chapters/ch1_problem_definition}
+\input{chapters/ch2_domain_analysis}
+\input{chapters/ch3_proposed_solution}
+\input{chapters/ch4_comparative_analysis}
+\input{chapters/ch5_target_audience}
+\include{chapters/requirements}
+\include{chapters/system_design}
 \addcontentsline{toc}{chapter}{BIBLIOGRAPHY}
 \printbibliography[title=BIBLIOGRAPHY]
 
 \appendix
 
-\appendixchapter{Some code}
-\label{appendix:bucket_call}
+\include{chapters/appendix_stakeholders}
+\include{chapters/appendix_problem_indicators}
+\include{chapters/appendix_comparative_analysis}
 
-\begin{listing}[ht]
-\inputminted{js}{src/code.js}
-\end{listing}
+% \appendixchapter{Some code}
+% \label{appendix:bucket_call}
+
+% \begin{listing}[ht]
+% \inputminted{js}{src/code.js}
+% \end{listing}
 
 
 \end{document}
