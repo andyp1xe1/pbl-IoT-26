@@ -1,6 +1,6 @@
 # E02 — HW Abstraction Layer
 
-- **Status:** Not Started
+- **Status:** Done
 - **Phase:** I
 - **Owns:** `air-glove/lib/dd_mpu6050/include/`, `lib/dd_touch/include/`, `lib/dd_ble_hid/include/`, shared types in `lib/app_config/include/`
 - **Plan:** `docs/plans/01-scaffolding.md` §"Interface contracts"
@@ -60,9 +60,9 @@ bool        dd_ble_hid_is_connected(void);
 
 ## Acceptance criteria
 
-- [ ] All four headers compile stand-alone (`-Wall -Werror`, no Arduino include).
-- [ ] `srv_*` libs can include these headers and compile under `env:native`.
-- [ ] Every type and function documented with a one-line comment on its contract (units, ownership, thread-safety).
+- [x] All four headers compile stand-alone (`-Wall -Werror`, no Arduino include). *(Verified both `gcc -std=c11` and `g++ -std=gnu++17` with `-Wall -Wextra -Werror -fsyntax-only` on each header individually.)*
+- [x] `srv_*` libs can include these headers and compile under `env:native`. *(Verified with `g++ -Wall -Wextra -Werror` against the native include paths.)*
+- [x] Every type and function documented with a one-line comment on its contract (units, ownership, thread-safety). *(Done — see header file top comments + per-function docs.)*
 
 ## Dependencies
 
@@ -71,3 +71,4 @@ bool        dd_ble_hid_is_connected(void);
 ## Progress log
 
 - 2026-04-21: Epic created. Contract surface drafted above; final signatures finalised in `docs/plans/02`–`04`.
+- 2026-04-21: Interface headers delivered: `ag_types.h`, `dd_mpu6050.h`, `dd_touch.h`, `dd_ble_hid.h`. Every struct/enum/function now carries a contract comment covering units, ownership, and thread-safety. Stand-alone compile verified with `-Wall -Wextra -Werror` in both C11 and C++17 modes. Status: Done.
