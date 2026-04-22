@@ -1,6 +1,6 @@
 # E06 — Sensor Fusion Service (srv_fusion)
 
-- **Status:** Not Started
+- **Status:** In Progress (implementation complete; native test verification pending `pio test -e native`)
 - **Phase:** I
 - **Owns:** `air-glove/lib/srv_fusion/`
 - **Plan:** `docs/plans/05-srv-fusion.md`
@@ -38,11 +38,11 @@ void        srv_fusion_reset(void);
 
 ## Acceptance criteria
 
-- [ ] Native test: static input (`a = (0, 0, 9.81)`, `ω = 0`) converges to identity quaternion (`|1 − q0| < 0.01`) within 2 s of simulated time at dt = 10 ms.
-- [ ] Native test: quaternion norm stays in `[0.99, 1.01]` across 10 000 updates with Gaussian noise injection.
-- [ ] Native test: single update runs in < 200 µs on the test host.
+- [~] Native test: static input (`a = (0, 0, 9.81)`, `ω = 0`) converges to identity quaternion (`|1 − q0| < 0.01`) within 2 s of simulated time at dt = 10 ms. *Test `test_identity_convergence_under_gravity` written. Pending `pio test -e native` run.*
+- [~] Native test: quaternion norm stays in `[0.99, 1.01]` across 10 000 updates with Gaussian noise injection. *Test `test_quaternion_norm_stable_under_noise` written (deterministic LCG noise). Pending `pio test -e native` run.*
+- [~] Native test: single update runs in < 200 µs on the test host. *Test `test_update_runs_under_200us_host` written using `clock_gettime(CLOCK_MONOTONIC)`. Pending `pio test -e native` run.*
 - [ ] On-target benchmark (logged once in bring-up): `srv_fusion_update()` < 2 ms on ESP32 @ 240 MHz.
-- [ ] No Arduino or ESP-IDF include present — confirmed by `env:native` building the lib.
+- [x] No Arduino or ESP-IDF include present — confirmed by `env:native` building the lib. *Verified: `srv_fusion.cpp` includes only `<math.h>` and `srv_fusion.h`; header includes only `ag_types.h`. Zero platform headers reachable.*
 
 ## Dependencies
 
@@ -51,3 +51,8 @@ void        srv_fusion_reset(void);
 ## Progress log
 
 - 2026-04-21: Epic created. Madgwick chosen per `docs/srs/decisions.md` ADR-002. Plan: `docs/plans/05-srv-fusion.md`.
+- 2026-04-21: Implementation delivered on branch `feat/sensor-fusion`. New / updated files:
+  - `air-glove/lib/srv_fusion/library.json` — PlatformIO manifest (native + esp32dev, depends on app_config).
+  - `air-glove/lib/srv_fusion/include/srv_fusion.h` — switched to `#pragma once`; full contract comments added (units, thread-safety, free-fall behaviour, return codes).
+  - `air-glove/lib/srv_fusion/src/srv_fusion.cpp` — Madgwick 2010 IMU variant, inlined. State: `s_beta`, `s_q`, `s_prev_t_us` (~24 bytes SRAM). dt clamped to [1 ms, 50 ms]; free-fall guard on `|a|² < 1e-6`; norm-collapse detection resets to identity and returns `AG_ERR_IO`. Only `<math.h>` included.
+  - `air-glove/test/test_srv_fusion/test_main.cpp` — 7 native Unity tests replacing the placeholder: init OK, bad-beta rejection, gravity convergence (2 s), norm stability (10 000 noisy samples), free-fall safety, null-arg rejection, < 200 µs timing. Full `pio test -e native -f test_srv_fusion` run is the outstanding gate before marking Done.

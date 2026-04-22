@@ -1,0 +1,11 @@
+{
+  "name": "srv_fusion",
+  "version": "0.1.0",
+  "description": "Madgwick 6-axis IMU sensor fusion service (accel + gyro → unit quaternion). Pure C++ — no Arduino or ESP-IDF includes.",
+  "keywords": ["imu", "fusion", "madgwick", "quaternion"],
+  "frameworks": ["arduino", "espidf", "*"],
+  "platforms": ["espressif32", "native"],
+  "dependencies": {
+    "app_config": "*"
+  }
+}
