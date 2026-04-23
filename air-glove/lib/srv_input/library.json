@@ -1,0 +1,11 @@
+{
+  "name": "srv_input",
+  "version": "0.1.0",
+  "description": "Per-pad debounce + edge-detect FSM turning touch_sample_t into PRESS/RELEASE events. Pure C++ — no Arduino or ESP-IDF includes.",
+  "keywords": ["input", "debounce", "fsm", "touch"],
+  "frameworks": ["arduino", "espidf", "*"],
+  "platforms": ["espressif32", "native"],
+  "dependencies": {
+    "app_config": "*"
+  }
+}
