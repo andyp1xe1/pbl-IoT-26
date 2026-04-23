@@ -1,6 +1,6 @@
 # Air Glove — Progress Dashboard
 
-Last updated: 2026-04-21 (E01 + E02 closed; E03 + E04 + E05 implementation landed, on-target + HIL tests pending)
+Last updated: 2026-04-23 (E06 native tests green; E07 Done — 11/11 native tests pass)
 
 Legend: `Not Started` · `In Progress` · `Blocked` · `Done` · `Backlog` (not yet promoted to active planning).
 
@@ -13,8 +13,8 @@ Legend: `Not Started` · `In Progress` · `Blocked` · `Done` · `Backlog` (not 
 | E03 | IMU Driver (dd_mpu6050) | In Progress | 80 | — | `docs/plans/02-dd-mpu6050.md` | 2026-04-21 | Driver + regs + on-target Unity suite landed; shim compile clean; `pio test -e esp32dev -f test_dd_mpu6050` on real hardware is the remaining gate |
 | E04 | Touch Driver (dd_touch) | In Progress | 80 | — | `docs/plans/03-dd-touch.md` | 2026-04-21 | Driver + 6-test Unity suite landed; shim compile clean; `pio test -e esp32dev -f test_dd_touch` on real hardware is the remaining gate |
 | E05 | BLE HID Driver (dd_ble_hid) | In Progress | 80 | — | `docs/plans/04-dd-ble-hid.md` | 2026-04-21 | NimBLE driver + HID descriptor + on-target unit tests landed; platformio.ini native-lib exclusion tidied via `lib_ignore`; header purity verified with `-Werror`; HIL matrix (Windows/Linux/macOS pairing, latency bench, 125 Hz soak) is the remaining gate |
-| E06 | Sensor Fusion Service (srv_fusion) | Not Started | 0 | — | `docs/plans/05-srv-fusion.md` | 2026-04-21 | Madgwick @ 100 Hz |
-| E07 | Motion Mapping (srv_motion) | Not Started | 0 | — | `docs/plans/06-srv-motion.md` | 2026-04-21 | Rate-control, dead-zone, gain |
+| E06 | Sensor Fusion Service (srv_fusion) | In Progress | 90 | — | `docs/plans/05-srv-fusion.md` | 2026-04-23 | Madgwick 6-axis implemented; 7/7 native Unity tests pass locally; on-target `< 2 ms / update` bench on ESP32 is the remaining gate |
+| E07 | Motion Mapping (srv_motion) | Done | 100 | — | `docs/plans/06-srv-motion.md` | 2026-04-23 | Implementation + 11 native tests landed; 11/11 pass locally; all six acceptance criteria covered |
 | E08 | Input Service (srv_input) | Not Started | 0 | — | `docs/plans/07-srv-input.md` | 2026-04-21 | Debounce, edges, chords |
 | E09 | Application Controller (app_controller) | Not Started | 0 | — | `docs/plans/08-app-controller.md` | 2026-04-21 | Tasks, queues, FSM |
 

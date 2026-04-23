@@ -1,0 +1,12 @@
+{
+  "name": "srv_motion",
+  "version": "0.1.0",
+  "description": "Quaternion-to-cursor (dx, dy) mapping service: quaternion delta → dead-zone → non-linear gain → velocity cap → clutch gate. Pure C++ — no Arduino or ESP-IDF includes.",
+  "keywords": ["cursor", "mapping", "rate-control", "hid"],
+  "frameworks": ["arduino", "espidf", "*"],
+  "platforms": ["espressif32", "native"],
+  "dependencies": {
+    "app_config": "*",
+    "srv_fusion": "*"
+  }
+}
