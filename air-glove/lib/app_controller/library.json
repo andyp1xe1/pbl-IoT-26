@@ -1,0 +1,17 @@
+{
+  "name": "app_controller",
+  "version": "0.1.0",
+  "description": "Top-level firmware orchestration: driver/service init, FreeRTOS tasks, queues, and the INIT → PAIRING → ACTIVE boot FSM. esp32dev-only; not buildable on host native.",
+  "keywords": ["orchestration", "freertos", "fsm", "tasks"],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": {
+    "app_config":  "*",
+    "dd_mpu6050":  "*",
+    "dd_touch":    "*",
+    "dd_ble_hid":  "*",
+    "srv_fusion":  "*",
+    "srv_motion":  "*",
+    "srv_input":   "*"
+  }
+}
