@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
@@ -50,11 +51,22 @@ void t_imu_sample_fn(void *)
 {
     TickType_t        last   = xTaskGetTickCount();
     const TickType_t  period = pdMS_TO_TICKS(10);
+    uint32_t          count  = 0;
 
     for (;;) {
         imu_sample_t s;
-        if (dd_mpu6050_read(&s) == AG_OK) {
+        ag_result_t rc = dd_mpu6050_read(&s);
+        if (rc == AG_OK) {
             queue_put_drop_oldest(q_imu, &s);
+            /* Log actual sensor values once per second (every 100 reads). */
+            if (++count % 100 == 0) {
+                printf("[imu] accel=[%+5.2f %+5.2f %+5.2f] m/s²  "
+                       "gyro=[%+6.3f %+6.3f %+6.3f] rad/s\n",
+                       (double)s.ax, (double)s.ay, (double)s.az,
+                       (double)s.gx, (double)s.gy, (double)s.gz);
+            }
+        } else {
+            printf("[imu] read error rc=%d\n", rc);
         }
         vTaskDelayUntil(&last, period);
     }
@@ -63,6 +75,8 @@ void t_imu_sample_fn(void *)
 /* ── t_fusion — q_imu → Madgwick → q_orientation ──────────────────────── */
 void t_fusion_fn(void *)
 {
+    uint32_t count = 0;
+
     for (;;) {
         imu_sample_t s;
         if (xQueueReceive(q_imu, &s, portMAX_DELAY) != pdTRUE) continue;
@@ -71,6 +85,19 @@ void t_fusion_fn(void *)
         if (srv_fusion_update(&s, &f.q) != AG_OK) continue;
         f.t_us = s.t_us;
         queue_put_drop_oldest(q_orientation, &f);
+
+        /* Log Euler angles once per second (every 100 fused frames). */
+        if (++count % 100 == 0) {
+            const quat_t &q = f.q;
+            const float kRad2Deg = 57.2957795f;
+            float roll  = atan2f(2.0f*(q.q0*q.q1 + q.q2*q.q3),
+                                 1.0f - 2.0f*(q.q1*q.q1 + q.q2*q.q2)) * kRad2Deg;
+            float pitch = asinf( 2.0f*(q.q0*q.q2 - q.q3*q.q1))        * kRad2Deg;
+            float yaw   = atan2f(2.0f*(q.q0*q.q3 + q.q1*q.q2),
+                                 1.0f - 2.0f*(q.q2*q.q2 + q.q3*q.q3)) * kRad2Deg;
+            printf("[fusion] roll=%+6.1f  pitch=%+6.1f  yaw=%+6.1f  deg\n",
+                   (double)roll, (double)pitch, (double)yaw);
+        }
     }
 }
 
@@ -139,8 +166,9 @@ void t_app_fn(void *)
          * return electrode and is never mapped. Ring is reserved for
          * Phase II (E10 scroll/clutch). */
         uint8_t bit = 0;
-        if      (ev.pad == TOUCH_PAD_INDEX)  bit = 0x01;   /* left  */
-        else if (ev.pad == TOUCH_PAD_MIDDLE) bit = 0x02;   /* right */
+        const char *btn_name = nullptr;
+        if      (ev.pad == TOUCH_PAD_INDEX)  { bit = 0x01; btn_name = "LEFT (index)";  }
+        else if (ev.pad == TOUCH_PAD_MIDDLE) { bit = 0x02; btn_name = "RIGHT (middle)"; }
         else continue;
 
         uint8_t prev = g_current_buttons.load();
@@ -151,6 +179,9 @@ void t_app_fn(void *)
 
         if (next != prev) {
             g_current_buttons.store(next);
+            printf("[touch] %s click %s\n",
+                   btn_name,
+                   (ev.kind == INPUT_EVT_PRESS) ? "PRESSED" : "released");
             hid_mouse_report_t r;
             r.dx      = 0;
             r.dy      = 0;
@@ -165,9 +196,16 @@ void t_app_fn(void *)
 void t_ble_hid_fn(void *)
 {
     g_fsm_state.store(APP_STATE_PAIRING);
+    printf("[ble] PAIRING — advertising as AirGlove, open Bluetooth settings on your host\n");
+
+    bool was_connected = false;
 
     for (;;) {
         if (!dd_ble_hid_is_connected()) {
+            if (was_connected) {
+                printf("[ble] host disconnected — back to PAIRING, re-advertising\n");
+                was_connected = false;
+            }
             g_fsm_state.store(APP_STATE_PAIRING);
             /* Drain so upstream producers don't stall while we wait. */
             hid_mouse_report_t trash;
@@ -176,6 +214,10 @@ void t_ble_hid_fn(void *)
             continue;
         }
 
+        if (!was_connected) {
+            printf("[ble] ACTIVE — host connected, mouse reports flowing at up to 125 Hz\n");
+            was_connected = true;
+        }
         g_fsm_state.store(APP_STATE_ACTIVE);
 
         hid_mouse_report_t merged;

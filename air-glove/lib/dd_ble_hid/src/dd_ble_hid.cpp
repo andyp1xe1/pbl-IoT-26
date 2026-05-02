@@ -61,12 +61,14 @@ public:
                                  kConnIntervalMaxUnits,
                                  kConnSlaveLatency,
                                  kConnSupervisionTimeoutUnits);
-        printf("[dd_ble_hid] connected\n");
+        const uint8_t *a = desc->peer_id_addr.val;
+        printf("[dd_ble_hid] host connected  addr=%02X:%02X:%02X:%02X:%02X:%02X  handle=%u\n",
+               a[5], a[4], a[3], a[2], a[1], a[0], (unsigned)desc->conn_handle);
     }
     void onDisconnect(NimBLEServer *server) override {
         (void)server;
         s_connected = false;
-        printf("[dd_ble_hid] disconnected; re-advertising\n");
+        printf("[dd_ble_hid] host disconnected; re-advertising\n");
         NimBLEDevice::startAdvertising();
     }
 };

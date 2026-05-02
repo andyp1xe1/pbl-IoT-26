@@ -73,6 +73,8 @@ extern "C" ag_result_t dd_mpu6050_init(void) {
     s_gyro_scale_rads  = kDegToRad / 65.5f;
 
     s_initialized = true;
+    printf("[dd_mpu6050] WHO_AM_I=0x%02X  accel=+/-4g  gyro=+/-500dps  DLPF=42Hz  I2C=400kHz\n",
+           (unsigned)who);
     return AG_OK;
 }
 

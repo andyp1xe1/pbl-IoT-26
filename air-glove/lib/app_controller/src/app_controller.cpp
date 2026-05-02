@@ -57,18 +57,30 @@ static const motion_config_t kDefaultMotionCfg = {
     /* velocity_cap */ 127.0f,
 };
 
+static const char *state_name(int s)
+{
+    switch (s) {
+        case APP_STATE_INIT:    return "INIT";
+        case APP_STATE_PAIRING: return "PAIRING";
+        case APP_STATE_ACTIVE:  return "ACTIVE";
+        default:                return "UNKNOWN";
+    }
+}
+
 /* 1 Hz printf of each task's stack high-water-mark (in words) plus the
  * current top-level FSM state. Referenced in the E09 acceptance criterion
  * "no task high-water exceeds 75 % of allocated after 10-minute stress". */
 static void heartbeat_cb(TimerHandle_t /*xTimer*/)
 {
-    printf("[heartbeat] state=%d connected=%d\n",
-           g_fsm_state.load(), (int)dd_ble_hid_is_connected());
+    const bool connected = dd_ble_hid_is_connected();
+    printf("[heartbeat] state=%-7s  BLE=%s\n",
+           state_name(g_fsm_state.load()),
+           connected ? "connected" : "waiting for host");
     for (auto &t : s_tasks) {
         if (t.handle != nullptr) {
             const unsigned hwm =
                 (unsigned)uxTaskGetStackHighWaterMark(t.handle);
-            printf("[heartbeat] hwm %-12s %4u words\n", t.name, hwm);
+            printf("[heartbeat]   %-14s stack free: %4u words\n", t.name, hwm);
         }
     }
 }
