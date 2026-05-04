@@ -25,6 +25,8 @@ static motion_config_t s_cfg = {
 static quat_t s_q_prev   = { 1.0f, 0.0f, 0.0f, 0.0f };
 static bool   s_has_prev = false;
 static bool   s_clutch   = false;
+static float  s_dx_ema   = 0.0f;
+static float  s_dy_ema   = 0.0f;
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -35,6 +37,7 @@ static bool cfg_is_valid(const motion_config_t *cfg)
     if (!isfinite(cfg->gain_low)     || cfg->gain_low     <= 0.0f) return false;
     if (!isfinite(cfg->gain_exp)     || cfg->gain_exp     <  1.0f) return false;
     if (!isfinite(cfg->velocity_cap) || cfg->velocity_cap <= 0.0f) return false;
+    if (!isfinite(cfg->gain_y_scale) || cfg->gain_y_scale <= 0.0f) return false;
     return true;
 }
 
@@ -65,6 +68,8 @@ extern "C" ag_result_t srv_motion_init(const motion_config_t *cfg)
     s_cfg      = *cfg;
     s_has_prev = false;
     s_clutch   = false;
+    s_dx_ema   = 0.0f;
+    s_dy_ema   = 0.0f;
     return AG_OK;
 }
 
@@ -77,6 +82,8 @@ extern "C" void srv_motion_reset(void)
 {
     s_has_prev = false;
     s_clutch   = false;
+    s_dx_ema   = 0.0f;
+    s_dy_ema   = 0.0f;
 }
 
 extern "C" ag_result_t srv_motion_update(const quat_t *q, float dt_s,
@@ -124,21 +131,45 @@ extern "C" ag_result_t srv_motion_update(const quat_t *q, float dt_s,
     const float dtheta_x = 2.0f * d1;   /* around X axis — roll  */
     const float dtheta_y = 2.0f * d2;   /* around Y axis — pitch */
 
-    /* Axis mapping (Phase I; sign flips deferred to bring-up):
-     *   pitch (dtheta_y) → cursor dx
-     *   roll  (dtheta_x) → cursor dy */
-    float theta_for_x = dtheta_y;
-    float theta_for_y = dtheta_x;
+    /* Axis mapping:
+     *   pitch (dtheta_y) → cursor dx  (tilt forward/back  = left/right)
+     *   roll  (dtheta_x) → cursor dy  (tilt left/right    = up/down, negated)
+     * Negating dy so that tilting the hand down moves the cursor down,
+     * matching the natural hand orientation on the desk. */
+    float theta_for_x =  dtheta_y;
+    float theta_for_y = -dtheta_x;
 
-    /* Per-axis dead-zone. */
-    if (fabsf(theta_for_x) < s_cfg.deadzone_rad) theta_for_x = 0.0f;
-    if (fabsf(theta_for_y) < s_cfg.deadzone_rad) theta_for_y = 0.0f;
+    /* Radial (circular) dead-zone — applied to the 2-D magnitude, not
+     * per-axis independently. A square per-axis dead-zone kills diagonal
+     * movement because both components can sit below the threshold even
+     * when the total motion is significant. The circular version treats
+     * all directions equally, and the (r - dz)/r rescale keeps the
+     * transition smooth (no sudden jump from zero to nonzero). */
+    const float r = sqrtf(theta_for_x * theta_for_x +
+                          theta_for_y * theta_for_y);
+    if (r < s_cfg.deadzone_rad) {
+        theta_for_x = 0.0f;
+        theta_for_y = 0.0f;
+    } else {
+        const float scale = (r - s_cfg.deadzone_rad) / r;
+        theta_for_x *= scale;
+        theta_for_y *= scale;
+    }
 
     const float out_x = apply_gain(theta_for_x, &s_cfg);
-    const float out_y = apply_gain(theta_for_y, &s_cfg);
+    const float out_y = apply_gain(theta_for_y, &s_cfg) * s_cfg.gain_y_scale;
 
-    *dx = clamp_to_int8(out_x);
-    *dy = clamp_to_int8(out_y);
+    /* EMA on the float output before int8 quantisation.
+     * Prevents single-pixel jitter when the motion is near an integer
+     * boundary. alpha=0.22 → time constant ≈ 40 ms at 100 Hz — smooth
+     * without being sluggish. Previous value (0.45, τ≈17 ms) was too short
+     * to suppress jitter near quantisation boundaries. */
+    static constexpr float kEma = 0.22f;
+    s_dx_ema = kEma * out_x + (1.0f - kEma) * s_dx_ema;
+    s_dy_ema = kEma * out_y + (1.0f - kEma) * s_dy_ema;
+
+    *dx = clamp_to_int8(s_dx_ema);
+    *dy = clamp_to_int8(s_dy_ema);
 
     s_q_prev = *q;
     return AG_OK;

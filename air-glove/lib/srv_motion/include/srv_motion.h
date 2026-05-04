@@ -38,6 +38,12 @@ typedef struct {
     /* Absolute cap applied before the final int8 clamp; must be > 0 and
      * typically <= 127. */
     float velocity_cap;
+
+    /* Independent Y-axis output multiplier applied after the gain curve.
+     * Use > 1.0 when up/down feels slower than left/right for the same hand
+     * motion (common — wrist roll produces smaller angular deltas than pitch).
+     * Must be > 0. 1.0 = no adjustment (symmetric axes). */
+    float gain_y_scale;
 } motion_config_t;
 
 /* Initialise (or re-initialise) the motion mapper. Copies `*cfg` into the

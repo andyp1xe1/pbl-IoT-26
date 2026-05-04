@@ -58,9 +58,10 @@ extern "C" ag_result_t dd_mpu6050_init(void) {
     if (write_reg(REG_PWR_MGMT_1,   0x00) != AG_OK) return AG_ERR_IO;
     delay(2);
 
-    /* DLPF_CFG = 3 → gyro ~42 Hz / accel ~44 Hz, 1 kHz internal rate.
-     * Matched bandwidth keeps Madgwick fusion phase-aligned. */
-    if (write_reg(REG_CONFIG,       0x03) != AG_OK) return AG_ERR_IO;
+    /* DLPF_CFG = 1 → gyro 188 Hz / accel 184 Hz, 1 kHz internal rate.
+     * Wider bandwidth cuts hardware phase lag (~1 ms vs ~10 ms at CFG=3),
+     * giving the fusion filter fresher data and reducing cursor lag. */
+    if (write_reg(REG_CONFIG,       0x01) != AG_OK) return AG_ERR_IO;
 
     /* FS_SEL = 1 → ±500 °/s → 65.5 LSB/(°/s). */
     if (write_reg(REG_GYRO_CONFIG,  0x08) != AG_OK) return AG_ERR_IO;
@@ -73,7 +74,7 @@ extern "C" ag_result_t dd_mpu6050_init(void) {
     s_gyro_scale_rads  = kDegToRad / 65.5f;
 
     s_initialized = true;
-    printf("[dd_mpu6050] WHO_AM_I=0x%02X  accel=+/-4g  gyro=+/-500dps  DLPF=42Hz  I2C=400kHz\n",
+    printf("[dd_mpu6050] WHO_AM_I=0x%02X  accel=+/-4g  gyro=+/-500dps  DLPF=188Hz  I2C=400kHz\n",
            (unsigned)who);
     return AG_OK;
 }

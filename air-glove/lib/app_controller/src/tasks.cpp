@@ -106,10 +106,19 @@ void t_touch_fn(void *)
 {
     TickType_t        last   = xTaskGetTickCount();
     const TickType_t  period = pdMS_TO_TICKS(10);
+    uint32_t          count  = 0;
 
     for (;;) {
         touch_sample_t s;
         if (dd_touch_read(&s) == AG_OK) {
+            /* Log raw touch values every 2 s so you can see live readings
+             * vs thresholds — useful for diagnosing wire contact issues. */
+            if (++count % 200 == 0) {
+                printf("[touch] raw  thumb:%4u  index:%4u  middle:%4u  "
+                       "mask=0x%02X\n",
+                       s.raw[0], s.raw[1], s.raw[2], s.touched_mask);
+            }
+
             input_event_t evts[TOUCH_PAD_COUNT];
             size_t n = 0;
             if (srv_input_process(&s, evts, TOUCH_PAD_COUNT, &n) == AG_OK) {
@@ -156,37 +165,80 @@ void t_motion_fn(void *)
 }
 
 /* ── t_app — drain button events, publish on change ───────────────────── */
+/*
+ * Interaction model:
+ *
+ *   index alone   → left click  (HID button bit 0)
+ *   middle alone  → right click (HID button bit 1)
+ *   index+middle  → CLUTCH: cursor freezes; reposition hand; release to resume
+ *
+ * Clutch lets you physically return your wrist to a neutral angle without
+ * the cursor following. The chord entry releases any held HID buttons so the
+ * host never sees a stuck click. Individual button events are suppressed on
+ * clutch exit so the release gesture doesn't register as a spurious click.
+ */
 void t_app_fn(void *)
 {
+    bool index_held  = false;
+    bool middle_held = false;
+    bool clutch_on   = false;
+
     for (;;) {
         input_event_t ev;
         if (xQueueReceive(q_buttons, &ev, portMAX_DELAY) != pdTRUE) continue;
 
-        /* Map fingertip pad → HID button bit. Thumb is the common
-         * return electrode and is never mapped. Ring is reserved for
-         * Phase II (E10 scroll/clutch). */
-        uint8_t bit = 0;
-        const char *btn_name = nullptr;
-        if      (ev.pad == TOUCH_PAD_INDEX)  { bit = 0x01; btn_name = "LEFT (index)";  }
-        else if (ev.pad == TOUCH_PAD_MIDDLE) { bit = 0x02; btn_name = "RIGHT (middle)"; }
-        else continue;
+        if (ev.pad != TOUCH_PAD_INDEX && ev.pad != TOUCH_PAD_MIDDLE) continue;
+
+        const bool is_press   = (ev.kind == INPUT_EVT_PRESS);
+        const bool is_release = (ev.kind == INPUT_EVT_RELEASE);
+        if (!is_press && !is_release) continue;
+
+        /* Update per-finger held state before evaluating the chord. */
+        if (ev.pad == TOUCH_PAD_INDEX)  index_held  = is_press;
+        if (ev.pad == TOUCH_PAD_MIDDLE) middle_held = is_press;
+
+        const bool both_held = index_held && middle_held;
+
+        /* ── Clutch entry: both fingers now held ──────────────────────── */
+        if (both_held && !clutch_on) {
+            clutch_on = true;
+            srv_motion_set_clutch(true);
+            /* Release any held HID button so host doesn't see a stuck click. */
+            g_current_buttons.store(0);
+            hid_mouse_report_t r = {};
+            queue_put_drop_oldest(q_hid, &r);
+            printf("[touch] CLUTCH on  — reposition hand freely\n");
+            continue;
+        }
+
+        /* ── Clutch exit: one finger lifted while clutch was active ───── */
+        if (!both_held && clutch_on) {
+            clutch_on = false;
+            srv_motion_set_clutch(false);
+            /* Suppress the releasing finger's event so it doesn't register
+             * as a spurious click after the reposition. */
+            g_current_buttons.store(0);
+            printf("[touch] CLUTCH off — cursor active\n");
+            continue;
+        }
+
+        /* ── Inside clutch: ignore all button changes ─────────────────── */
+        if (clutch_on) continue;
+
+        /* ── Normal single-finger button handling ─────────────────────── */
+        const uint8_t bit  = (ev.pad == TOUCH_PAD_INDEX) ? 0x01u : 0x02u;
+        const char *name   = (bit == 0x01) ? "LEFT (index)" : "RIGHT (middle)";
 
         uint8_t prev = g_current_buttons.load();
         uint8_t next = prev;
-        if      (ev.kind == INPUT_EVT_PRESS)   next |=  bit;
-        else if (ev.kind == INPUT_EVT_RELEASE) next &= ~bit;
-        else continue;
+        if (is_press)   next |=  bit;
+        if (is_release) next &= ~bit;
 
         if (next != prev) {
             g_current_buttons.store(next);
-            printf("[touch] %s click %s\n",
-                   btn_name,
-                   (ev.kind == INPUT_EVT_PRESS) ? "PRESSED" : "released");
-            hid_mouse_report_t r;
-            r.dx      = 0;
-            r.dy      = 0;
+            printf("[touch] %s %s\n", name, is_press ? "PRESSED" : "released");
+            hid_mouse_report_t r = {};
             r.buttons = next;
-            r.wheel   = 0;
             queue_put_drop_oldest(q_hid, &r);
         }
     }
@@ -221,9 +273,11 @@ void t_ble_hid_fn(void *)
         g_fsm_state.store(APP_STATE_ACTIVE);
 
         hid_mouse_report_t merged;
-        if (xQueueReceive(q_hid, &merged, pdMS_TO_TICKS(8)) != pdTRUE) {
-            /* No report in the last 8 ms (~125 Hz pacing). Loop back to
-             * re-check the connection state. */
+        if (xQueueReceive(q_hid, &merged, pdMS_TO_TICKS(15)) != pdTRUE) {
+            /* No report in the last 15 ms (~67 Hz pacing). This aligns with
+             * the typical 15 ms Windows BLE HID connection interval so each
+             * notify() maps to at most one connection event, preventing the
+             * NimBLE TX queue from filling up and destabilising the link. */
             continue;
         }
 

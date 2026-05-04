@@ -51,10 +51,15 @@ static TaskEntry s_tasks[6] = {
 static TimerHandle_t s_heartbeat_timer = nullptr;
 
 static const motion_config_t kDefaultMotionCfg = {
-    /* deadzone_rad */ 0.02f,
-    /* gain_low     */ 400.0f,
-    /* gain_exp     */ 1.6f,
-    /* velocity_cap */ 127.0f,
+    /* deadzone_rad */ 0.006f,  /* ~0.35° — filters gyro noise (~0.002 rad)
+                                 *  without blocking slow intentional tilts.  */
+    /* gain_low     */ 600.0f,  /* linear term — gives ~25 px/frame at 30°/s  */
+    /* gain_exp     */ 1.2f,    /* mild curve: fast flicks feel snappy         */
+    /* velocity_cap */ 127.0f,  /* full int8 range                             */
+    /* gain_y_scale */ 1.7f,    /* wrist roll (up/down) produces smaller deltas
+                                 *  than pitch (left/right) for the same hand
+                                 *  displacement — this levels them out.
+                                 *  Tune up if Y is still slow, down if too fast. */
 };
 
 static const char *state_name(int s)
@@ -116,7 +121,12 @@ extern "C" ag_result_t app_controller_start(void)
 
     /* ── 2. Services (cannot fail on valid inputs) ──────────────────── */
     printf("[app_controller] init services\n");
-    (void)srv_fusion_init(0.08f);
+    /* beta=0.05: Madgwick's recommended base is 0.033 for IMU-only; 0.05 gives
+     * a small extra margin against gyro bias drift without the "sticky /
+     * fighting-back" feel that 0.15 caused during slow tilts. The motion-aware
+     * guard in srv_fusion already suppresses accel correction during fast
+     * movements, so beta only matters in the near-static regime. */
+    (void)srv_fusion_init(0.05f);
     (void)srv_motion_init(&kDefaultMotionCfg);
     (void)srv_input_init(15);
 
