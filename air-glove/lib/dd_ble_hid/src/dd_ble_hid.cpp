@@ -30,16 +30,13 @@ namespace {
 /* HID "Appearance" for a mouse, per Bluetooth Core appearance values.  */
 static constexpr uint16_t kAppearanceMouse = 0x03C2;
 
-/* Connection-parameter hints passed on connect. Interval units are
- * 1.25 ms; supervision-timeout units are 10 ms.
- *   min=6  → 7.5 ms   (host may round up)
- *   max=12 → 15 ms    (target cap for low latency)
- *   latency=0         (no slave latency — we want quick reports)
- *   timeout=200       (2000 ms supervision) */
-static constexpr uint16_t kConnIntervalMinUnits = 6;
-static constexpr uint16_t kConnIntervalMaxUnits = 12;
-static constexpr uint16_t kConnSlaveLatency     = 0;
-static constexpr uint16_t kConnSupervisionTimeoutUnits = 200;
+/* Connection parameters intentionally NOT sent on connect.
+ * Calling updateConnParams() immediately in onConnect() causes Windows
+ * and some Android hosts to drop the connection before the HID driver
+ * has finished enumerating the device. The host negotiates its own
+ * interval (typically 7.5–45 ms for HID), which is stable and fast
+ * enough for a mouse. Re-add updateConnParams only if measured latency
+ * becomes a problem after the host stack is fully set up. */
 
 static volatile bool      s_connected = false;
 static bool               s_initialized = false;
@@ -49,20 +46,21 @@ static NimBLECharacteristic *s_input = nullptr;
 
 /* Connection callback. NimBLE invokes these on its own internal task;
  * writes to `s_connected` are a single-byte volatile store, safe to
- * read lock-free from other tasks on ESP32. */
+ * read lock-free from other tasks on ESP32.
+ *
+ * s_connected is intentionally NOT set in onConnect. The host (Windows,
+ * macOS, Linux) needs 200–800 ms after onConnect to finish GATT discovery,
+ * load the HID kernel driver, and write 0x0001 to the CCC descriptor to
+ * enable notifications. Sending HID reports before that happens causes
+ * most host BLE stacks to force a disconnection.
+ * s_connected is set to true only in InputReportCallbacks::onSubscribe,
+ * which fires exactly when the host enables notifications. */
 class ServerCallbacks : public NimBLEServerCallbacks {
 public:
-    void onConnect(NimBLEServer *server, ble_gap_conn_desc *desc) override {
-        s_connected = true;
-        /* Negotiate a tight interval for low cursor latency. Host may
-         * clamp the request but will never go below its minimum. */
-        server->updateConnParams(desc->conn_handle,
-                                 kConnIntervalMinUnits,
-                                 kConnIntervalMaxUnits,
-                                 kConnSlaveLatency,
-                                 kConnSupervisionTimeoutUnits);
+    void onConnect(NimBLEServer * /*server*/, ble_gap_conn_desc *desc) override {
         const uint8_t *a = desc->peer_id_addr.val;
-        printf("[dd_ble_hid] host connected  addr=%02X:%02X:%02X:%02X:%02X:%02X  handle=%u\n",
+        printf("[dd_ble_hid] host connected  addr=%02X:%02X:%02X:%02X:%02X:%02X  handle=%u"
+               " — awaiting HID enumeration\n",
                a[5], a[4], a[3], a[2], a[1], a[0], (unsigned)desc->conn_handle);
     }
     void onDisconnect(NimBLEServer *server) override {
@@ -73,7 +71,27 @@ public:
     }
 };
 
-static ServerCallbacks s_server_cb;
+/* Characteristic callback: fires when the host writes the CCC descriptor
+ * on the HID input-report characteristic (subValue == 1 → notify enabled,
+ * subValue == 0 → notify disabled).  This is the correct moment to mark
+ * the link as ready for HID reports. */
+class InputReportCallbacks : public NimBLECharacteristicCallbacks {
+public:
+    void onSubscribe(NimBLECharacteristic * /*pChar*/,
+                     ble_gap_conn_desc   * /*desc*/,
+                     uint16_t             subValue) override {
+        if (subValue & 0x0001) {   /* bit 0 = notify */
+            s_connected = true;
+            printf("[dd_ble_hid] host enabled HID notifications — reports flowing\n");
+        } else {
+            s_connected = false;
+            printf("[dd_ble_hid] host disabled HID notifications\n");
+        }
+    }
+};
+
+static ServerCallbacks      s_server_cb;
+static InputReportCallbacks s_input_cb;
 
 } /* namespace */
 
@@ -84,10 +102,12 @@ extern "C" ag_result_t dd_ble_hid_init(const char *device_name) {
 
     NimBLEDevice::init(name);
 
-    /* Just-works bonding: bonding=true + MITM=false + SC=true. MITM would
-     * require a PIN display the glove does not have. IOCap advertises our
-     * lack of I/O and forces just-works pairing across Windows/Linux/macOS. */
-    NimBLEDevice::setSecurityAuth(true, false, true);
+    /* No bonding for MVP — bonding requires the host to cache keys that the
+     * ESP32 does not persist across reboots. On Windows this causes an
+     * immediate disconnect on every reconnect because Windows presents the
+     * old keys and the ESP32 has none. Open (unauthenticated, no bonding)
+     * is stable and perfectly fine for a mouse. */
+    NimBLEDevice::setSecurityAuth(false, false, false);
     NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
     s_server = NimBLEDevice::createServer();
@@ -111,6 +131,10 @@ extern "C" ag_result_t dd_ble_hid_init(const char *device_name) {
      * argument is the NimBLE report-characteristic index, not a wire ID. */
     s_input = s_hid->inputReport(0);
     if (s_input == nullptr) return AG_ERR_INIT;
+
+    /* Register the subscription callback so s_connected is set only after
+     * the host writes the CCC descriptor (notifications enabled). */
+    s_input->setCallbacks(&s_input_cb);
 
     s_hid->startServices();
 
@@ -139,6 +163,10 @@ extern "C" ag_result_t dd_ble_hid_send(const hid_mouse_report_t *r) {
     buf[3] = (uint8_t)r->wheel;
 
     s_input->setValue(buf, sizeof(buf));
+    /* NimBLE-Arduino 1.4.x notify() is void — it silently drops the
+     * notification if the host has not subscribed or the TX queue is full.
+     * Back-pressure is handled upstream: t_ble_hid_fn paces sends at ≤67 Hz
+     * (15 ms timeout) to stay within the typical 15 ms connection interval. */
     s_input->notify();
     return AG_OK;
 }
