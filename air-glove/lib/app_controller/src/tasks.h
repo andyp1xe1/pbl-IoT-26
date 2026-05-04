@@ -34,6 +34,10 @@ extern QueueHandle_t q_hid;           /* depth 8, item hid_mouse_report_t */
  * Single-byte atomic load/store is lock-free on ESP32. */
 extern std::atomic<uint8_t> g_current_buttons;
 
+/* True while the ring finger is held and scroll mode is active.
+ * Writer: t_app. Reader: t_motion (routes dy → wheel instead of cursor). */
+extern std::atomic<bool> g_scroll_mode;
+
 /* Opaque top-level FSM state for the heartbeat to log. */
 enum app_state_t { APP_STATE_INIT = 0, APP_STATE_PAIRING, APP_STATE_ACTIVE };
 extern std::atomic<int> g_fsm_state;

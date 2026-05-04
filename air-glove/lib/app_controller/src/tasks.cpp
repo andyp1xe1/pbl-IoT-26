@@ -134,7 +134,14 @@ void t_touch_fn(void *)
 /* ── t_motion — q_orientation → dx/dy → q_hid ─────────────────────────── */
 void t_motion_fn(void *)
 {
-    uint64_t last_t_us = 0;
+    uint64_t last_t_us   = 0;
+    int16_t  scroll_accum = 0;   /* sub-notch accumulator for scroll mode */
+
+    /* One HID wheel "notch" is emitted every kScrollThreshold dy-units
+     * accumulated. Lower = faster scroll. Tune between 60 (fast) and 200
+     * (slow). At current gain settings a moderate upward tilt produces
+     * ~15 dy/frame, so threshold=100 → ~1 notch every 7 frames ≈ 14 Hz. */
+    static constexpr int16_t kScrollThreshold = 100;
 
     for (;;) {
         oriented_frame_t f;
@@ -149,17 +156,36 @@ void t_motion_fn(void *)
         int8_t dx = 0, dy = 0;
         if (srv_motion_update(&f.q, dt_s, &dx, &dy) != AG_OK) continue;
 
-        /* Only emit motion reports when the cursor actually moves.
-         * Button-only changes go through t_app directly. Each report
-         * carries the CURRENT button byte so t_ble_hid can coalesce
-         * without clobbering button state. */
-        if (dx != 0 || dy != 0) {
-            hid_mouse_report_t r;
-            r.dx      = dx;
-            r.dy      = dy;
-            r.buttons = g_current_buttons.load();
-            r.wheel   = 0;
-            queue_put_drop_oldest(q_hid, &r);
+        if (g_scroll_mode.load()) {
+            /* ── Scroll mode: dy drives the wheel, cursor stays frozen ── *
+             * The motion clutch is NOT active during scroll (t_app only
+             * engages it for the button-chord). The mapper runs normally so
+             * dy carries a live tilt value. We accumulate it and emit one
+             * HID wheel notch per kScrollThreshold units. No cursor report
+             * is emitted, so the cursor is naturally frozen.              */
+            scroll_accum += dy;
+            int8_t wheel = 0;
+            while (scroll_accum >=  kScrollThreshold && wheel <  7)
+                { wheel++;  scroll_accum -= kScrollThreshold; }
+            while (scroll_accum <= -kScrollThreshold && wheel > -7)
+                { wheel--;  scroll_accum += kScrollThreshold; }
+
+            if (wheel != 0) {
+                hid_mouse_report_t r = {};
+                r.buttons = g_current_buttons.load();
+                r.wheel   = wheel;
+                queue_put_drop_oldest(q_hid, &r);
+            }
+        } else {
+            scroll_accum = 0;   /* reset when leaving scroll mode */
+
+            if (dx != 0 || dy != 0) {
+                hid_mouse_report_t r = {};
+                r.dx      = dx;
+                r.dy      = dy;
+                r.buttons = g_current_buttons.load();
+                queue_put_drop_oldest(q_hid, &r);
+            }
         }
     }
 }
@@ -168,30 +194,50 @@ void t_motion_fn(void *)
 /*
  * Interaction model:
  *
- *   index alone   → left click  (HID button bit 0)
- *   middle alone  → right click (HID button bit 1)
- *   index+middle  → CLUTCH: cursor freezes; reposition hand; release to resume
+ *   index alone       → left click  (HID button bit 0)
+ *   middle alone      → right click (HID button bit 1)
+ *   index + middle    → CLUTCH: cursor freezes; reposition hand; release to resume
+ *   ring (hold)       → SCROLL: vertical tilt scrolls wheel; cursor frozen;
+ *                       clicks suppressed while ring is held
  *
- * Clutch lets you physically return your wrist to a neutral angle without
- * the cursor following. The chord entry releases any held HID buttons so the
- * host never sees a stuck click. Individual button events are suppressed on
- * clutch exit so the release gesture doesn't register as a spurious click.
+ * Clutch and scroll both call srv_motion_set_clutch; refresh_clutch() keeps
+ * the two paths from racing — clutch stays engaged while EITHER is active.
  */
 void t_app_fn(void *)
 {
     bool index_held  = false;
     bool middle_held = false;
-    bool clutch_on   = false;
+    bool ring_held   = false;
+    bool clutch_on   = false;   /* button-chord clutch */
+
+    /* Engage/disengage the motion clutch.
+     * Only the button-chord clutch (clutch_on) freezes the motion mapper.
+     * Scroll mode (ring_held) does NOT engage the clutch — the mapper keeps
+     * running so t_motion_fn can read a live dy to drive the wheel. The
+     * cursor freezes in scroll mode because t_motion_fn routes dy to the
+     * wheel field instead of emitting cursor reports. */
+    auto refresh_clutch = [&]() {
+        srv_motion_set_clutch(clutch_on);
+    };
 
     for (;;) {
         input_event_t ev;
         if (xQueueReceive(q_buttons, &ev, portMAX_DELAY) != pdTRUE) continue;
 
-        if (ev.pad != TOUCH_PAD_INDEX && ev.pad != TOUCH_PAD_MIDDLE) continue;
-
         const bool is_press   = (ev.kind == INPUT_EVT_PRESS);
         const bool is_release = (ev.kind == INPUT_EVT_RELEASE);
         if (!is_press && !is_release) continue;
+
+        /* ── Scroll mode: ring finger ──────────────────────────────────── */
+        if (ev.pad == TOUCH_PAD_RING) {
+            ring_held = is_press;
+            g_scroll_mode.store(ring_held);
+            refresh_clutch();
+            printf("[touch] SCROLL %s\n", ring_held ? "on" : "off");
+            continue;
+        }
+
+        if (ev.pad != TOUCH_PAD_INDEX && ev.pad != TOUCH_PAD_MIDDLE) continue;
 
         /* Update per-finger held state before evaluating the chord. */
         if (ev.pad == TOUCH_PAD_INDEX)  index_held  = is_press;
@@ -202,11 +248,10 @@ void t_app_fn(void *)
         /* ── Clutch entry: both fingers now held ──────────────────────── */
         if (both_held && !clutch_on) {
             clutch_on = true;
-            srv_motion_set_clutch(true);
-            /* Release any held HID button so host doesn't see a stuck click. */
             g_current_buttons.store(0);
             hid_mouse_report_t r = {};
             queue_put_drop_oldest(q_hid, &r);
+            refresh_clutch();
             printf("[touch] CLUTCH on  — reposition hand freely\n");
             continue;
         }
@@ -214,20 +259,18 @@ void t_app_fn(void *)
         /* ── Clutch exit: one finger lifted while clutch was active ───── */
         if (!both_held && clutch_on) {
             clutch_on = false;
-            srv_motion_set_clutch(false);
-            /* Suppress the releasing finger's event so it doesn't register
-             * as a spurious click after the reposition. */
             g_current_buttons.store(0);
+            refresh_clutch();
             printf("[touch] CLUTCH off — cursor active\n");
             continue;
         }
 
-        /* ── Inside clutch: ignore all button changes ─────────────────── */
-        if (clutch_on) continue;
+        /* ── Suppress clicks while clutch or scroll is active ─────────── */
+        if (clutch_on || ring_held) continue;
 
         /* ── Normal single-finger button handling ─────────────────────── */
         const uint8_t bit  = (ev.pad == TOUCH_PAD_INDEX) ? 0x01u : 0x02u;
-        const char *name   = (bit == 0x01) ? "LEFT (index)" : "RIGHT (middle)";
+        const char   *name = (bit == 0x01) ? "LEFT (index)" : "RIGHT (middle)";
 
         uint8_t prev = g_current_buttons.load();
         uint8_t next = prev;

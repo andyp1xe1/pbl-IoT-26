@@ -31,6 +31,7 @@ QueueHandle_t q_hid         = nullptr;
 /* ── Shared atomic state (definitions) ─────────────────────────────────── */
 std::atomic<uint8_t> g_current_buttons{0};
 std::atomic<int>     g_fsm_state{APP_STATE_INIT};
+std::atomic<bool>    g_scroll_mode{false};
 
 /* ── File-scope helpers ────────────────────────────────────────────────── */
 namespace {
