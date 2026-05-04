@@ -13,6 +13,7 @@
 
 #include <Arduino.h>
 #include <esp_timer.h>
+#include <stdio.h>
 
 #include "dd_touch.h"
 #include "ag_pins.h"
@@ -20,12 +21,19 @@
 namespace {
 
 /* GPIO per `touch_pad_id_t` — indices MUST align with the enum:
- *   THUMB=0 → T0 (GPIO4), INDEX=1 → T2 (GPIO2),
- *   MIDDLE=2 → T3 (GPIO15), RING=3 → T4 (GPIO13). */
-static const uint8_t kGpio[TOUCH_PAD_COUNT] = { 4, 2, 15, 13 };
+ *   THUMB=0 → T0 (GPIO4), INDEX=1 → T6 (GPIO14),
+ *   MIDDLE=2 → T3 (GPIO15), RING=3 → T4 (GPIO13).
+ *
+ * INDEX was moved from GPIO2 (T2) to GPIO14 (T6): GPIO2 has a 10 kΩ
+ * LED pulldown on all standard ESP32 dev boards that causes touchRead()
+ * to return 0 regardless of finger contact. GPIO14 is load-free. */
+static const uint8_t kGpio[TOUCH_PAD_COUNT] = { 4, 14, 15, 13 };
 
-static constexpr float   kThreshRatio  = 0.7f;   /* touched when raw < baseline * 0.7 */
-static constexpr float   kEmaAlpha     = 0.01f;  /* ~1 s time constant at 100 Hz      */
+/* Touch fires when raw < baseline * kThreshRatio.
+ * 0.85 = 15% capacitance drop needed — works with bare wire ends on all
+ * strapping-load-free GPIOs (GPIO4, GPIO14, GPIO15, GPIO13). */
+static constexpr float kThreshRatio = 0.85f;
+static constexpr float   kEmaAlpha     = 0.05f;  /* ~0.2 s baseline drift adapt       */
 static constexpr uint8_t kCalibSamples = 50;
 
 static uint16_t s_baseline [TOUCH_PAD_COUNT];
@@ -56,6 +64,26 @@ extern "C" ag_result_t dd_touch_init(void) {
     }
 
     s_initialized = true;
+
+    bool wiring_ok = true;
+    for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
+        if (s_baseline[i] < 20) {
+            printf("[dd_touch] WARN: pad %u baseline=%u is too low — "
+                   "check wire on GPIO%u is not shorted or disconnected\n",
+                   i, s_baseline[i], kGpio[i]);
+            wiring_ok = false;
+        }
+    }
+    printf("[dd_touch] baselines — thumb:%u  index:%u  middle:%u  ring:%u  "
+           "(thresholds: %u  %u  %u  %u)  wiring=%s\n",
+           s_baseline[0], s_baseline[1], s_baseline[2], s_baseline[3],
+           s_threshold[0], s_threshold[1], s_threshold[2], s_threshold[3],
+           wiring_ok ? "OK" : "CHECK WIRES");
+    if (!wiring_ok) {
+        printf("[dd_touch] Normal baseline is 300-1500. Low values mean the\n"
+               "           wire is not in the breadboard row for that GPIO.\n"
+               "           Wires must be free in air during boot.\n");
+    }
     return AG_OK;
 }
 
