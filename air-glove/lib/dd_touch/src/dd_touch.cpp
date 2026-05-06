@@ -1,10 +1,15 @@
-/* dd_touch — ESP32 native capacitive-touch driver (Phase I implementation).
+/* dd_touch — hybrid input driver.
  *
- * Uses the Arduino-ESP32 `touchRead()` wrapper. A future swap to the
- * ESP-IDF `driver/touch_sensor.h` (native, interrupt-capable, non-blocking)
- * is tracked as a follow-up under E14 (power management).
+ * THUMB (GPIO4)  : ESP32 native capacitive-touch (`touchRead()`), used as a
+ *                  gesture reference pad on the glove palm/thumb.
+ * INDEX (GPIO14) : tactile push-button wired between GPIO and GND, read via
+ * MIDDLE (GPIO15)  `digitalRead()` with INPUT_PULLUP.  Button pressed = LOW.
+ * RING  (GPIO13)
  *
- * ADR-003 locks in the ESP32 native peripheral as our sensing method,
+ * The button pads bypass the capacitive peripheral entirely — no calibration,
+ * no EMA baseline, no threshold arithmetic.  srv_input debounces all pads
+ * identically (2-tick FSM), so no changes are needed above this layer.
+ *
  * ADR-005 permits the Arduino include below because this is a dd_* lib.
  *
  * All state is file-scope `static`; only the two public entry points
@@ -20,20 +25,20 @@
 
 namespace {
 
-/* GPIO per `touch_pad_id_t` — indices MUST align with the enum:
- *   THUMB=0 → T0 (GPIO4), INDEX=1 → T6 (GPIO14),
- *   MIDDLE=2 → T3 (GPIO15), RING=3 → T4 (GPIO13).
- *
- * INDEX was moved from GPIO2 (T2) to GPIO14 (T6): GPIO2 has a 10 kΩ
- * LED pulldown on all standard ESP32 dev boards that causes touchRead()
- * to return 0 regardless of finger contact. GPIO14 is load-free. */
+/* GPIO per `touch_pad_id_t` — indices MUST align with the enum. */
 static const uint8_t kGpio[TOUCH_PAD_COUNT] = { 4, 14, 15, 13 };
 
+/* Pads backed by physical buttons (INPUT_PULLUP, active-LOW).
+ * Bit N = pad N uses digitalRead instead of touchRead. */
+static constexpr uint8_t kButtonMask =
+    (1u << TOUCH_PAD_INDEX) | (1u << TOUCH_PAD_MIDDLE) | (1u << TOUCH_PAD_RING);
+
+/* ── Capacitive-touch settings (THUMB only) ───────────────────────────── */
+
 /* Touch fires when raw < baseline * kThreshRatio.
- * 0.85 = 15% capacitance drop needed — works with bare wire ends on all
- * strapping-load-free GPIOs (GPIO4, GPIO14, GPIO15, GPIO13). */
-static constexpr float kThreshRatio = 0.85f;
-static constexpr float   kEmaAlpha     = 0.05f;  /* ~0.2 s baseline drift adapt       */
+ * 0.85 = 15% capacitance drop. */
+static constexpr float   kThreshRatio  = 0.85f;
+static constexpr float   kEmaAlpha     = 0.05f;   /* ~0.2 s drift adaptation */
 static constexpr uint8_t kCalibSamples = 50;
 
 static uint16_t s_baseline [TOUCH_PAD_COUNT];
@@ -44,16 +49,36 @@ static inline uint16_t apply_ratio(uint16_t b) {
     return (uint16_t)((float)b * kThreshRatio);
 }
 
+static inline bool is_button(uint8_t i) {
+    return (kButtonMask & (uint8_t)(1u << i)) != 0;
+}
+
 } /* namespace */
 
 extern "C" ag_result_t dd_touch_init(void) {
-    /* Prime the peripheral: the very first reading after boot is often 0. */
+    /* Configure button GPIOs as digital inputs with internal pull-up.
+     * The button connects GPIO to GND; released = HIGH, pressed = LOW. */
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
-        (void)touchRead(kGpio[i]);
+        if (is_button(i)) {
+            pinMode(kGpio[i], INPUT_PULLUP);
+            s_baseline [i] = 0;
+            s_threshold[i] = 0;
+        }
+    }
+
+    /* Capacitive calibration for non-button pads (THUMB only).
+     * Prime the peripheral first — first reading after boot is often 0. */
+    for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
+        if (!is_button(i)) {
+            (void)touchRead(kGpio[i]);
+        }
     }
     delay(10);
 
+    bool cap_wiring_ok = true;
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
+        if (is_button(i)) continue;
+
         uint32_t sum = 0;
         for (uint8_t s = 0; s < kCalibSamples; ++s) {
             sum += (uint16_t)touchRead(kGpio[i]);
@@ -61,29 +86,21 @@ extern "C" ag_result_t dd_touch_init(void) {
         }
         s_baseline [i] = (uint16_t)(sum / kCalibSamples);
         s_threshold[i] = apply_ratio(s_baseline[i]);
+
+        if (s_baseline[i] < 20) {
+            printf("[dd_touch] WARN: capacitive pad %u baseline=%u is too low — "
+                   "check wire on GPIO%u\n", i, s_baseline[i], kGpio[i]);
+            cap_wiring_ok = false;
+        }
     }
 
     s_initialized = true;
 
-    bool wiring_ok = true;
-    for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
-        if (s_baseline[i] < 20) {
-            printf("[dd_touch] WARN: pad %u baseline=%u is too low — "
-                   "check wire on GPIO%u is not shorted or disconnected\n",
-                   i, s_baseline[i], kGpio[i]);
-            wiring_ok = false;
-        }
-    }
-    printf("[dd_touch] baselines — thumb:%u  index:%u  middle:%u  ring:%u  "
-           "(thresholds: %u  %u  %u  %u)  wiring=%s\n",
-           s_baseline[0], s_baseline[1], s_baseline[2], s_baseline[3],
-           s_threshold[0], s_threshold[1], s_threshold[2], s_threshold[3],
-           wiring_ok ? "OK" : "CHECK WIRES");
-    if (!wiring_ok) {
-        printf("[dd_touch] Normal baseline is 300-1500. Low values mean the\n"
-               "           wire is not in the breadboard row for that GPIO.\n"
-               "           Wires must be free in air during boot.\n");
-    }
+    printf("[dd_touch] init OK — thumb cap baseline:%u threshold:%u  "
+           "index/middle/ring: button (INPUT_PULLUP)  cap_wiring=%s\n",
+           s_baseline[TOUCH_PAD_THUMB], s_threshold[TOUCH_PAD_THUMB],
+           cap_wiring_ok ? "OK" : "CHECK WIRES");
+
     return AG_OK;
 }
 
@@ -93,18 +110,27 @@ extern "C" ag_result_t dd_touch_read(touch_sample_t *out) {
 
     uint8_t mask = 0;
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
-        const uint16_t raw = (uint16_t)touchRead(kGpio[i]);
-        out->raw[i] = raw;
-
-        if (raw < s_threshold[i]) {
-            mask |= (uint8_t)(1U << i);
-            /* Intentionally do NOT update baseline while touched — otherwise
-             * a held touch would slowly redefine "idle" as "low". */
+        if (is_button(i)) {
+            /* Button pressed = GPIO pulled LOW by the switch. */
+            const bool pressed = (digitalRead(kGpio[i]) == LOW);
+            out->raw[i] = pressed ? 0u : 1u;   /* 0=pressed, 1=open — diagnostic only */
+            if (pressed) {
+                mask |= (uint8_t)(1u << i);
+            }
         } else {
-            const float bl = (1.0f - kEmaAlpha) * (float)s_baseline[i]
-                           + kEmaAlpha           * (float)raw;
-            s_baseline [i] = (uint16_t)bl;
-            s_threshold[i] = apply_ratio(s_baseline[i]);
+            /* Capacitive path (THUMB). */
+            const uint16_t raw = (uint16_t)touchRead(kGpio[i]);
+            out->raw[i] = raw;
+
+            if (raw < s_threshold[i]) {
+                mask |= (uint8_t)(1u << i);
+                /* Do NOT update baseline while touched. */
+            } else {
+                const float bl = (1.0f - kEmaAlpha) * (float)s_baseline[i]
+                               + kEmaAlpha           * (float)raw;
+                s_baseline [i] = (uint16_t)bl;
+                s_threshold[i] = apply_ratio(s_baseline[i]);
+            }
         }
     }
 
