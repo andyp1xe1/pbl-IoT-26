@@ -31,6 +31,14 @@ static quat_t quat_y(float theta)
     return q;
 }
 
+/* Unit quaternion for rotation of `theta` radians around Z (yaw). */
+static quat_t quat_z(float theta)
+{
+    const float h = theta * 0.5f;
+    quat_t q = { cosf(h), 0.0f, 0.0f, sinf(h) };
+    return q;
+}
+
 static motion_config_t cfg_default(void)
 {
     motion_config_t c;
@@ -38,6 +46,7 @@ static motion_config_t cfg_default(void)
     c.gain_low     = 400.0f;
     c.gain_exp     = 1.6f;
     c.velocity_cap = 127.0f;
+    c.gain_y_scale = 1.0f;
     return c;
 }
 
@@ -154,17 +163,23 @@ static void test_sign_preservation(void)
     srv_motion_update(&qpn, 0.01f, &dx, &dy);
     TEST_ASSERT_TRUE_MESSAGE(dx < 0, "negative pitch should yield negative dx");
 
-    /* Positive roll → positive dy. */
+    /* Positive yaw → negative dx (mirrored — combines with pitch). */
+    srv_motion_reset(); prime_with_identity();
+    quat_t qyp = quat_z(0.10f);
+    srv_motion_update(&qyp, 0.01f, &dx, &dy);
+    TEST_ASSERT_TRUE_MESSAGE(dx < 0, "positive yaw should yield negative dx");
+
+    /* Positive roll → negative dy (dy is negated so hand-down = cursor-down). */
     srv_motion_reset(); prime_with_identity();
     quat_t qrp = quat_x(0.10f);
     srv_motion_update(&qrp, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE_MESSAGE(dy > 0, "positive roll should yield positive dy");
+    TEST_ASSERT_TRUE_MESSAGE(dy < 0, "positive roll should yield negative dy");
 
-    /* Negative roll → negative dy. */
+    /* Negative roll → positive dy. */
     srv_motion_reset(); prime_with_identity();
     quat_t qrn = quat_x(-0.10f);
     srv_motion_update(&qrn, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE_MESSAGE(dy < 0, "negative roll should yield negative dy");
+    TEST_ASSERT_TRUE_MESSAGE(dy > 0, "negative roll should yield positive dy");
 }
 
 /* 8. Engaging the clutch forces zero output; releasing restores it. */

@@ -3,7 +3,7 @@
  * Algorithm (per docs/plans/06-srv-motion.md):
  *   1. delta = q_prev^-1 * q_curr  (conjugate for unit quaternion).
  *   2. Small-angle rotation vector ≈ 2 * delta.vec.
- *   3. Axis mapping: pitch (around Y) → dx, roll (around X) → dy.
+ *   3. Axis mapping: pitch+yaw (around Y, Z) → dx, roll (around X) → dy.
  *   4. Per-axis dead-zone on |theta|.
  *   5. Gain curve:  mag = gain_low * |theta| + |theta|^gain_exp, sign from theta.
  *   6. Velocity cap, then clamp to int8.
@@ -21,6 +21,7 @@ static motion_config_t s_cfg = {
     /* gain_low     */ 400.0f,
     /* gain_exp     */ 1.6f,
     /* velocity_cap */ 127.0f,
+    /* gain_y_scale */ 1.0f,
 };
 static quat_t s_q_prev   = { 1.0f, 0.0f, 0.0f, 0.0f };
 static bool   s_has_prev = false;
@@ -123,20 +124,26 @@ extern "C" ag_result_t srv_motion_update(const quat_t *q, float dt_s,
     const float p3 = -s_q_prev.q3;
     const float c0 = q->q0, c1 = q->q1, c2 = q->q2, c3 = q->q3;
 
-    /* Hamilton product — vector part only (scalar and q_k unused). */
+    /* Hamilton product — full vector part (all three axes used). */
     const float d1 = p0*c1 + p1*c0 + p2*c3 - p3*c2;
     const float d2 = p0*c2 - p1*c3 + p2*c0 + p3*c1;
+    const float d3 = p0*c3 + p1*c2 - p2*c1 + p3*c0;
 
     /* Small-angle rotation-vector approximation: 2 * delta.vec. */
     const float dtheta_x = 2.0f * d1;   /* around X axis — roll  */
     const float dtheta_y = 2.0f * d2;   /* around Y axis — pitch */
+    const float dtheta_z = 2.0f * d3;   /* around Z axis — yaw   */
 
     /* Axis mapping:
-     *   pitch (dtheta_y) → cursor dx  (tilt forward/back  = left/right)
-     *   roll  (dtheta_x) → cursor dy  (tilt left/right    = up/down, negated)
+     *   pitch − yaw (dtheta_y − dtheta_z) → cursor dx
+     *       Pitch (forward/back tilt) and yaw (rotate hand left/right) both
+     *       feel like "horizontal" pointing motions to the user — combine
+     *       them so either gesture moves the cursor sideways. Yaw is mirrored
+     *       so it agrees with pitch on which direction is "right".
+     *   roll (dtheta_x) → cursor dy (tilt left/right = up/down, negated)
      * Negating dy so that tilting the hand down moves the cursor down,
      * matching the natural hand orientation on the desk. */
-    float theta_for_x =  dtheta_y;
+    float theta_for_x =  dtheta_y - dtheta_z;
     float theta_for_y = -dtheta_x;
 
     /* Radial (circular) dead-zone — applied to the 2-D magnitude, not

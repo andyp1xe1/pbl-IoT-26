@@ -52,7 +52,7 @@ static TaskEntry s_tasks[6] = {
 static TimerHandle_t s_heartbeat_timer = nullptr;
 
 static const motion_config_t kDefaultMotionCfg = {
-    /* deadzone_rad */ 0.006f,  /* ~0.35° — filters gyro noise (~0.002 rad)
+    /* deadzone_rad */ 0.004f,  /* ~0.23° — filters gyro noise (~0.002 rad)
                                  *  without blocking slow intentional tilts.  */
     /* gain_low     */ 600.0f,  /* linear term — gives ~25 px/frame at 30°/s  */
     /* gain_exp     */ 1.2f,    /* mild curve: fast flicks feel snappy         */
