@@ -30,6 +30,11 @@ namespace {
 /* HID "Appearance" for a mouse, per Bluetooth Core appearance values.  */
 static constexpr uint16_t kAppearanceMouse = 0x03C2;
 
+/* Device Information Service strings surfaced on the companion-app About
+ * screen (model = 0x2A24, firmware revision = 0x2A26). */
+static constexpr char kModelNumber[] = "Air Glove (ESP32)";
+static constexpr char kFwRevision[]  = "1.0.0-phase1";
+
 /* Connection parameters intentionally NOT sent on connect.
  * Calling updateConnParams() immediately in onConnect() causes Windows
  * and some Android hosts to drop the connection before the HID driver
@@ -124,6 +129,20 @@ extern "C" ag_result_t dd_ble_hid_init(const char *device_name) {
     s_hid->pnp(0x02, /*vid*/0xE502, /*pid*/0xA111, /*ver*/0x0210);
     /* HID info: country=0 (not localised), flags=0x01 remote wake. */
     s_hid->hidInfo(0x00, 0x01);
+
+    /* Add Model Number + Firmware Revision to the Device Information Service so
+     * the companion app's About screen shows real values. Must precede
+     * startServices(). Manufacturer (0x2A29) is set below. */
+    if (NimBLEService *dis = s_hid->deviceInfo()) {
+        NimBLECharacteristic *model =
+            dis->createCharacteristic(NimBLEUUID((uint16_t)0x2A24), NIMBLE_PROPERTY::READ);
+        if (model) model->setValue(kModelNumber);
+        NimBLECharacteristic *fw =
+            dis->createCharacteristic(NimBLEUUID((uint16_t)0x2A26), NIMBLE_PROPERTY::READ);
+        if (fw) fw->setValue(kFwRevision);
+    }
+    /* Seed the standard Battery Service level so a host/app read is sane. */
+    s_hid->setBatteryLevel(100);
 
     s_hid->reportMap((uint8_t *)kHidReportMap, sizeof(kHidReportMap));
 
