@@ -20,6 +20,7 @@ This file is the **distilled machine-tractable view**. For rationale, user stori
 | FR-008 | II (backlog) | User calibration workflow for neutral orientation and zero-bias. | Single user action triggers calibration; persisted across reboots. | E12 |
 | FR-009 | III (backlog) | Fault-safe runtime behaviour with sensor anomaly detection. | IMU hang or I²C timeout is detected and recovered without user reset. | E13 |
 | FR-010 | III (backlog) | Standard Bluetooth HID compatibility across OS platforms without drivers. | Same firmware works on Windows 10+, Linux 5.4+, macOS 12+, Android/iOS mobile — no driver install. | E05, E13 |
+| FR-011 | II (backlog) | Companion app for runtime configuration & telemetry over a custom GATT service (separate from the HID profile). | Browser (Web Bluetooth) connects to a custom config GATT service; user adjusts sensitivity/deadzone/mapping, sees live telemetry, triggers calibration, reads device info. HID mouse path is unaffected. | E15 |
 
 ---
 
@@ -54,6 +55,7 @@ This file is the **distilled machine-tractable view**. For rationale, user stori
 | E12 Calibration (backlog) | FR-008 |
 | E13 Fault Safety (backlog) | FR-009, FR-010 |
 | E14 Power Management (backlog) | NFR-PWR-001 |
+| E15 Companion App (backlog) | FR-011 |
 
 ---
 
@@ -62,7 +64,7 @@ This file is the **distilled machine-tractable view**. For rationale, user stori
 - TinyML / on-device gesture classification (noted as future path in research report).
 - 2.4 GHz USB dongle variant (research mentioned it as fallback; not built here).
 - Multi-user profile storage beyond a single calibration set.
-- Companion mobile app.
+- Native (iOS/Android) companion app. A **web** companion app over Web Bluetooth is in scope as FR-011 (E15); native is explicitly not pursued (Web Bluetooth is unavailable on iOS — accepted, see ADR-008).
 
 ## Open requirement questions
 
