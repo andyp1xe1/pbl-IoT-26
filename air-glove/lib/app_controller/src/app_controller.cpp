@@ -18,6 +18,7 @@
 #include "dd_mpu6050.h"
 #include "dd_touch.h"
 #include "dd_ble_hid.h"
+#include "dd_ble_cfg.h"
 #include "srv_fusion.h"
 #include "srv_motion.h"
 #include "srv_input.h"
@@ -33,6 +34,11 @@ std::atomic<uint8_t> g_current_buttons{0};
 std::atomic<int>     g_fsm_state{APP_STATE_INIT};
 std::atomic<bool>    g_scroll_mode{false};
 
+/* ── Telemetry snapshot (definitions; declared in tasks.h) ─────────────── */
+std::atomic<int16_t>  g_tele_accel_mg[3]  = {};
+std::atomic<int16_t>  g_tele_gyro_mdps[3] = {};
+std::atomic<uint16_t> g_tele_touch_raw[4] = {};
+
 /* ── File-scope helpers ────────────────────────────────────────────────── */
 namespace {
 
@@ -40,13 +46,14 @@ struct TaskEntry {
     const char  *name;
     TaskHandle_t handle;
 };
-static TaskEntry s_tasks[6] = {
+static TaskEntry s_tasks[7] = {
     {"t_imu_sample", nullptr},
     {"t_fusion",     nullptr},
     {"t_touch",      nullptr},
     {"t_motion",     nullptr},
     {"t_app",        nullptr},
     {"t_ble_hid",    nullptr},
+    {"t_cfg",        nullptr},
 };
 
 static TimerHandle_t s_heartbeat_timer = nullptr;
@@ -120,6 +127,15 @@ extern "C" ag_result_t app_controller_start(void)
     rc = dd_ble_hid_init("AirGlove");
     if (rc != AG_OK) fatal_init("dd_ble_hid_init", rc);
 
+    /* Companion-app config/telemetry service shares the NimBLE server created
+     * above. Non-fatal: if it fails the glove still works as a plain mouse. */
+    printf("[app_controller] init stage 4: dd_ble_cfg\n");
+    rc = dd_ble_cfg_init(nullptr);
+    if (rc != AG_OK) {
+        printf("[app_controller] WARN dd_ble_cfg_init rc=%d — continuing without "
+               "companion service\n", rc);
+    }
+
     /* ── 2. Services (cannot fail on valid inputs) ──────────────────── */
     printf("[app_controller] init services\n");
     /* beta=0.05: Madgwick's recommended base is 0.033 for IMU-only; 0.05 gives
@@ -157,6 +173,10 @@ extern "C" ag_result_t app_controller_start(void)
                             3072, nullptr, 3, &s_tasks[4].handle, 1);
     xTaskCreatePinnedToCore(t_ble_hid_fn,    "t_ble_hid",
                             4096, nullptr, 6, &s_tasks[5].handle, 1);
+    /* Low priority: companion telemetry/config is best-effort, must never
+     * starve the motion or HID path. Larger stack covers NVS (flash) writes. */
+    xTaskCreatePinnedToCore(t_cfg_fn,        "t_cfg",
+                            4096, nullptr, 2, &s_tasks[6].handle, 1);
 
     for (auto &t : s_tasks) {
         if (t.handle == nullptr) fatal_init("task_create", AG_ERR_INIT);

@@ -10,6 +10,7 @@
     "dd_mpu6050":  "*",
     "dd_touch":    "*",
     "dd_ble_hid":  "*",
+    "dd_ble_cfg":  "*",
     "srv_fusion":  "*",
     "srv_motion":  "*",
     "srv_input":   "*"

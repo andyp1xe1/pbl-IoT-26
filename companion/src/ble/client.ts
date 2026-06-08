@@ -63,8 +63,11 @@ export class AirGloveClient implements IAirGloveClient {
     }
     this.emitConnection("connecting");
     try {
+      // Filter by name, not service UUID: the glove advertises as a HID mouse
+      // and does not put the 128-bit config service UUID in its (size-limited)
+      // advertisement. The custom service is discovered after connecting.
       this.device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: [CONFIG_SERVICE] }],
+        filters: [{ namePrefix: "AirGlove" }],
         optionalServices: [CONFIG_SERVICE, DIS_SERVICE, BATTERY_SERVICE],
       });
       this.device.addEventListener("gattserverdisconnected", () =>

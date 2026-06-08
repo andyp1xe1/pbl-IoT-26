@@ -42,6 +42,14 @@ extern std::atomic<bool> g_scroll_mode;
 enum app_state_t { APP_STATE_INIT = 0, APP_STATE_PAIRING, APP_STATE_ACTIVE };
 extern std::atomic<int> g_fsm_state;
 
+/* ── Latest-sample telemetry snapshot (for the companion-app GATT service) ──
+ * Writers: t_imu_sample (IMU axes), t_touch (pad raws). Reader: t_cfg.
+ * Each is a single 16-bit word — lock-free on ESP32. Values are pre-scaled to
+ * the wire units the companion app expects (milli-g, milli-deg/s, raw counts). */
+extern std::atomic<int16_t>  g_tele_accel_mg[3];
+extern std::atomic<int16_t>  g_tele_gyro_mdps[3];
+extern std::atomic<uint16_t> g_tele_touch_raw[4];
+
 /* Task entry points. */
 void t_imu_sample_fn(void *);
 void t_fusion_fn    (void *);
@@ -49,3 +57,4 @@ void t_touch_fn     (void *);
 void t_motion_fn    (void *);
 void t_app_fn       (void *);
 void t_ble_hid_fn   (void *);
+void t_cfg_fn       (void *);

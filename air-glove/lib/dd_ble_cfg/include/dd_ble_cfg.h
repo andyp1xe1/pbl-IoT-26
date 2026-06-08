@@ -1,0 +1,96 @@
+#ifndef DD_BLE_CFG_H
+#define DD_BLE_CFG_H
+
+/* dd_ble_cfg — custom BLE GATT "config & telemetry" service (Phase II).
+ *
+ * Sits alongside the HID mouse profile on the SAME NimBLE server created by
+ * dd_ble_hid. Lets a companion app (Web Bluetooth) read/write runtime tuning,
+ * stream live sensor telemetry, trigger calibration commands, and observe
+ * command status. The HID path is untouched: the OS still sees a plain mouse.
+ *
+ * GATT contract (see docs/plans/10-companion-app.md):
+ *   Service     41470001-7a13-4b1e-9c2f-1d0e5f6a7b8c
+ *     Config    41470002  R/W     10-byte packed config
+ *     Telemetry 41470003  R/Notify 24-byte packed sensor frame
+ *     Command   41470004  W       1-byte opcode
+ *     Status    41470005  R/Notify 4-byte command status
+ *
+ * Public header exposes only logical structs — no NimBLE types leak (ADR-005).
+ * MUST be initialised AFTER dd_ble_hid_init() so the NimBLE server exists.
+ */
+
+#include "ag_types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Runtime tuning, in logical units (no wire encoding leaks to callers). */
+typedef struct {
+    uint16_t sens_x_milli;    /* X sensitivity ×1000 (1000 = 1.00×)  */
+    uint16_t sens_y_milli;    /* Y sensitivity ×1000                 */
+    uint16_t deadzone_mrad;   /* per-frame angular deadzone, milli-rad */
+    uint8_t  click_map;       /* 0 = index→L / middle→R, 1 = swapped */
+} dd_ble_cfg_t;
+
+/* One live telemetry frame pushed to the host. */
+typedef struct {
+    int16_t  accel_mg[3];     /* milli-g                              */
+    int16_t  gyro_mdps[3];    /* milli-deg/s                          */
+    uint16_t touch[4];        /* raw pad readings: thumb,index,mid,ring */
+    uint8_t  battery_pct;     /* 0..100                               */
+    uint8_t  flags;           /* see DD_BLE_CFG_TFLAG_*                */
+} dd_ble_cfg_telemetry_t;
+
+/* Telemetry flag bits. */
+#define DD_BLE_CFG_TFLAG_HID_CONNECTED  0x01
+#define DD_BLE_CFG_TFLAG_CALIBRATING    0x02
+
+/* Command opcodes (host writes these to the Command characteristic). */
+#define DD_BLE_CFG_CMD_NONE             0x00
+#define DD_BLE_CFG_CMD_CALIBRATE_IMU    0x01
+#define DD_BLE_CFG_CMD_RECAL_TOUCH      0x02
+#define DD_BLE_CFG_CMD_SAVE             0x03
+#define DD_BLE_CFG_CMD_FACTORY_RESET    0x04
+
+/* Command status states (mirrored to the host on the Status characteristic). */
+#define DD_BLE_CFG_ST_IDLE      0
+#define DD_BLE_CFG_ST_RUNNING   1
+#define DD_BLE_CFG_ST_SUCCESS   2
+#define DD_BLE_CFG_ST_FAIL      3
+
+/* Register the service on the existing NimBLE server and seed config.
+ * `defaults` is used only if no config has been persisted to NVS; pass NULL
+ * to use built-in defaults. Returns AG_OK, or AG_ERR_* on failure.
+ * Call once, from app_controller, AFTER dd_ble_hid_init(). */
+ag_result_t dd_ble_cfg_init(const dd_ble_cfg_t *defaults);
+
+/* Copy the current (host-writable) config. Thread-safe. */
+void dd_ble_cfg_get_config(dd_ble_cfg_t *out);
+
+/* Monotonic counter incremented whenever the config changes (host write,
+ * load, or factory reset). Consumers compare against their last-applied
+ * value to know when to re-apply. Lock-free 32-bit read. */
+uint32_t dd_ble_cfg_config_version(void);
+
+/* Encode + notify one telemetry frame. Safe to call from a single producer
+ * task (e.g. t_cfg). No-op if the host has not subscribed. */
+void dd_ble_cfg_publish_telemetry(const dd_ble_cfg_telemetry_t *t);
+
+/* Pop a pending host command opcode, or DD_BLE_CFG_CMD_NONE if none.
+ * Clears the pending slot. Lock-free. */
+uint8_t dd_ble_cfg_take_command(void);
+
+/* Update + notify the command status (opcode being reported, state, 0..100). */
+void dd_ble_cfg_set_status(uint8_t opcode, uint8_t state, uint8_t progress);
+
+/* Persist the current config to NVS. Returns AG_OK on success. */
+ag_result_t dd_ble_cfg_save(void);
+
+/* Restore built-in defaults, clear NVS, bump the config version. */
+void dd_ble_cfg_factory_reset(void);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* DD_BLE_CFG_H */

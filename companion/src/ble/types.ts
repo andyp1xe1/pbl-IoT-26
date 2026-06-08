@@ -69,9 +69,9 @@ export function defaultConfig(): AgConfig {
   return {
     version: 1,
     flags: 0,
-    sensXMilli: 1400,
-    sensYMilli: 1200,
-    deadzoneMrad: 80,
+    sensXMilli: 1000,
+    sensYMilli: 1000,
+    deadzoneMrad: 4,
     clickMap: 0,
     reserved: 0,
   };

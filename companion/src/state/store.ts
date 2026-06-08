@@ -50,7 +50,9 @@ class Store {
       if (s === "disconnected")
         this.patch({ telemetry: null, deviceInfo: null, battery: null });
     });
-    client.onTelemetry((t) => this.patch({ telemetry: t }));
+    client.onTelemetry((t) =>
+      this.patch({ telemetry: t, battery: t.batteryPct }),
+    );
     client.onStatus((st) => this.patch({ lastStatus: st }));
     return client;
   }

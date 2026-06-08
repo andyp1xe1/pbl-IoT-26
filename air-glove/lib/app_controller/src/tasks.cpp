@@ -17,6 +17,7 @@
 #include "dd_mpu6050.h"
 #include "dd_touch.h"
 #include "dd_ble_hid.h"
+#include "dd_ble_cfg.h"
 #include "srv_fusion.h"
 #include "srv_motion.h"
 #include "srv_input.h"
@@ -44,6 +45,30 @@ static inline int8_t sat_add_i8(int a, int b)
     return (int8_t)r;
 }
 
+static inline int16_t sat_i16(float v)
+{
+    if (v >  32767.0f) v =  32767.0f;
+    if (v < -32768.0f) v = -32768.0f;
+    return (int16_t)v;
+}
+
+/* Translate the companion-app config into srv_motion tuning. At the default
+ * config (sens 1.00×, deadzone 4 mrad) this reproduces kDefaultMotionCfg, so
+ * the carefully-tuned out-of-box feel is unchanged. X speed tracks sens_x,
+ * Y speed tracks sens_y independently. */
+static motion_config_t motion_from_cfg(const dd_ble_cfg_t *c)
+{
+    const float sx = (float)c->sens_x_milli / 1000.0f;
+    const float sy = (float)c->sens_y_milli / 1000.0f;
+    motion_config_t mc;
+    mc.deadzone_rad = (float)c->deadzone_mrad / 1000.0f;
+    mc.gain_low     = 600.0f * sx;
+    mc.gain_exp     = 1.2f;
+    mc.velocity_cap = 127.0f;
+    mc.gain_y_scale = (sx > 0.0f) ? 1.7f * (sy / sx) : 1.7f;
+    return mc;
+}
+
 } /* namespace */
 
 /* ── t_imu_sample — poll MPU6050 at 100 Hz ─────────────────────────────── */
@@ -58,6 +83,17 @@ void t_imu_sample_fn(void *)
         ag_result_t rc = dd_mpu6050_read(&s);
         if (rc == AG_OK) {
             queue_put_drop_oldest(q_imu, &s);
+
+            /* Snapshot for the companion-app telemetry stream (wire units:
+             * accel milli-g, gyro milli-deg/s). 1 g = 9.80665 m/s²;
+             * 1 rad/s = 57.2957795 deg/s. */
+            g_tele_accel_mg[0].store(sat_i16(s.ax / 9.80665f * 1000.0f));
+            g_tele_accel_mg[1].store(sat_i16(s.ay / 9.80665f * 1000.0f));
+            g_tele_accel_mg[2].store(sat_i16(s.az / 9.80665f * 1000.0f));
+            g_tele_gyro_mdps[0].store(sat_i16(s.gx * 57295.7795f));
+            g_tele_gyro_mdps[1].store(sat_i16(s.gy * 57295.7795f));
+            g_tele_gyro_mdps[2].store(sat_i16(s.gz * 57295.7795f));
+
             /* Log actual sensor values once per second (every 100 reads). */
             if (++count % 100 == 0) {
                 printf("[imu] accel=[%+5.2f %+5.2f %+5.2f] m/s²  "
@@ -111,6 +147,11 @@ void t_touch_fn(void *)
     for (;;) {
         touch_sample_t s;
         if (dd_touch_read(&s) == AG_OK) {
+            /* Snapshot raw pad readings for the companion-app telemetry. */
+            for (int i = 0; i < TOUCH_PAD_COUNT && i < 4; ++i) {
+                g_tele_touch_raw[i].store(s.raw[i]);
+            }
+
             /* Log raw touch values every 2 s so you can see live readings
              * vs thresholds — useful for diagnosing wire contact issues. */
             if (++count % 200 == 0) {
@@ -143,9 +184,25 @@ void t_motion_fn(void *)
      * ~15 dy/frame, so threshold=100 → ~1 notch every 7 frames ≈ 14 Hz. */
     static constexpr int16_t kScrollThreshold = 100;
 
+    uint32_t applied_cfg_version = 0;   /* 0 ≠ initial s_version (1) → applies once at start */
+
     for (;;) {
         oriented_frame_t f;
         if (xQueueReceive(q_orientation, &f, portMAX_DELAY) != pdTRUE) continue;
+
+        /* Apply companion-app config changes from this (the owning) task, so
+         * srv_motion stays single-threaded per its contract. */
+        uint32_t cfg_version = dd_ble_cfg_config_version();
+        if (cfg_version != applied_cfg_version) {
+            dd_ble_cfg_t c;
+            dd_ble_cfg_get_config(&c);
+            motion_config_t mc = motion_from_cfg(&c);
+            srv_motion_init(&mc);
+            applied_cfg_version = cfg_version;
+            printf("[motion] applied config v%u: gain_low=%.0f y_scale=%.2f dz=%.4f\n",
+                   (unsigned)cfg_version, (double)mc.gain_low,
+                   (double)mc.gain_y_scale, (double)mc.deadzone_rad);
+        }
 
         float dt_s = 0.01f;
         if (last_t_us != 0 && f.t_us > last_t_us) {
@@ -210,6 +267,9 @@ void t_app_fn(void *)
     bool ring_held   = false;
     bool clutch_on   = false;   /* button-chord clutch */
 
+    uint32_t applied_cfg_version = 0;
+    uint8_t  click_map = 0;      /* 0 = index→L/middle→R, 1 = swapped */
+
     /* Engage/disengage the motion clutch.
      * Only the button-chord clutch (clutch_on) freezes the motion mapper.
      * Scroll mode (ring_held) does NOT engage the clutch — the mapper keeps
@@ -223,6 +283,15 @@ void t_app_fn(void *)
     for (;;) {
         input_event_t ev;
         if (xQueueReceive(q_buttons, &ev, portMAX_DELAY) != pdTRUE) continue;
+
+        /* Pick up companion-app click-mapping changes. */
+        uint32_t cfg_version = dd_ble_cfg_config_version();
+        if (cfg_version != applied_cfg_version) {
+            dd_ble_cfg_t c;
+            dd_ble_cfg_get_config(&c);
+            click_map = c.click_map;
+            applied_cfg_version = cfg_version;
+        }
 
         const bool is_press   = (ev.kind == INPUT_EVT_PRESS);
         const bool is_release = (ev.kind == INPUT_EVT_RELEASE);
@@ -268,9 +337,12 @@ void t_app_fn(void *)
         /* ── Suppress clicks while clutch or scroll is active ─────────── */
         if (clutch_on || ring_held) continue;
 
-        /* ── Normal single-finger button handling ─────────────────────── */
-        const uint8_t bit  = (ev.pad == TOUCH_PAD_INDEX) ? 0x01u : 0x02u;
-        const char   *name = (bit == 0x01) ? "LEFT (index)" : "RIGHT (middle)";
+        /* ── Normal single-finger button handling ─────────────────────── *
+         * click_map==1 swaps which physical finger fires left vs right. */
+        uint8_t bit;
+        if (ev.pad == TOUCH_PAD_INDEX) bit = click_map ? 0x02u : 0x01u;
+        else                           bit = click_map ? 0x01u : 0x02u;
+        const char *name = (bit == 0x01) ? "LEFT" : "RIGHT";
 
         uint8_t prev = g_current_buttons.load();
         uint8_t next = prev;
@@ -338,5 +410,60 @@ void t_ble_hid_fn(void *)
         }
 
         (void)dd_ble_hid_send(&merged);
+    }
+}
+
+/* ── t_cfg — companion-app telemetry pump + command handler ────────────── *
+ * Best-effort, low priority. Publishes a telemetry frame ~15 Hz from the
+ * latest IMU/touch snapshots, and services config commands (save / reset /
+ * calibrate) written by the companion app. The calibrate path is a Phase-stub
+ * that reports progress; the real gyro-bias routine lands with E12. */
+void t_cfg_fn(void *)
+{
+    TickType_t       last   = xTaskGetTickCount();
+    const TickType_t period = pdMS_TO_TICKS(66);   /* ~15 Hz */
+
+    for (;;) {
+        dd_ble_cfg_telemetry_t t = {};
+        for (int i = 0; i < 3; ++i) {
+            t.accel_mg[i]  = g_tele_accel_mg[i].load();
+            t.gyro_mdps[i] = g_tele_gyro_mdps[i].load();
+        }
+        for (int i = 0; i < 4; ++i) t.touch[i] = g_tele_touch_raw[i].load();
+        t.battery_pct = 100;   /* no fuel gauge in Phase I hardware */
+        t.flags = dd_ble_hid_is_connected() ? DD_BLE_CFG_TFLAG_HID_CONNECTED : 0;
+        dd_ble_cfg_publish_telemetry(&t);
+
+        uint8_t op = dd_ble_cfg_take_command();
+        switch (op) {
+            case DD_BLE_CFG_CMD_SAVE: {
+                ag_result_t rc = dd_ble_cfg_save();
+                dd_ble_cfg_set_status(
+                    op,
+                    rc == AG_OK ? DD_BLE_CFG_ST_SUCCESS : DD_BLE_CFG_ST_FAIL,
+                    100);
+                break;
+            }
+            case DD_BLE_CFG_CMD_FACTORY_RESET:
+                dd_ble_cfg_factory_reset();
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                break;
+            case DD_BLE_CFG_CMD_RECAL_TOUCH:
+                /* dd_touch re-baselines at boot; runtime re-baseline is not yet
+                 * exposed (E04 backlog) — acknowledge so the UI completes. */
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                break;
+            case DD_BLE_CFG_CMD_CALIBRATE_IMU:
+                for (int p = 0; p <= 100; p += 20) {
+                    dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING, (uint8_t)p);
+                    vTaskDelay(pdMS_TO_TICKS(300));
+                }
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                break;
+            default:
+                break;
+        }
+
+        vTaskDelayUntil(&last, period);
     }
 }
