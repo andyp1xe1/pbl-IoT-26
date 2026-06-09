@@ -10,7 +10,7 @@
   --accent-hover: #5d73be;
   --accent-weak: #eef1fb;
   --good: #4cb583;
-  --danger: #df6063;
+  --danger: #cc4d50;
   --warn: #d99a3a;
   --radius: 22px;
   --radius-sm: 14px;
@@ -819,13 +819,13 @@ body {
 }
 
 .btn-ghost-danger {
-  background: rgba(223, 96, 99, 0.10);
+  background: rgba(204, 77, 80, 0.10);
   color: var(--danger);
-  box-shadow: inset 0 0 0 1px rgba(223, 96, 99, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(204, 77, 80, 0.22);
 }
 .btn-ghost-danger:hover:not(:disabled) {
-  background: rgba(223, 96, 99, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(223, 96, 99, 0.36);
+  background: rgba(204, 77, 80, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(204, 77, 80, 0.36);
 }
 
 .btn:disabled {
@@ -1292,10 +1292,6 @@ input[type="range"] {
   max-width: 38ch;
 }
 
-.device-caption-error {
-  color: var(--danger);
-}
-
 /* Inline failure banner shown directly under the artwork on Home when the
  * last connect attempt failed. Soft danger-tinted pill rather than full
  * caption — it sits between the artwork and the controls so the reason
@@ -1304,12 +1300,14 @@ input[type="range"] {
   margin: 4px 0 0;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-  background: rgba(223, 96, 99, 0.10);
-  border: 1px solid rgba(223, 96, 99, 0.25);
+  background: rgba(204, 77, 80, 0.10);
+  border: 1px solid rgba(204, 77, 80, 0.28);
   color: var(--danger);
-  font-size: 13.5px;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.45;
   text-align: center;
+  text-wrap: balance;
   max-width: 42ch;
 }
 
@@ -1461,8 +1459,8 @@ input[type="range"] {
   max-width: 36ch;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-  background: rgba(223, 96, 99, 0.10);
-  border: 1px solid rgba(223, 96, 99, 0.22);
+  background: rgba(204, 77, 80, 0.10);
+  border: 1px solid rgba(204, 77, 80, 0.22);
   color: var(--danger);
   font-size: 13px;
   line-height: 1.5;

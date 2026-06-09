@@ -25,7 +25,7 @@ export function DeviceScreen() {
 
   if (link.kind === "unsupported") {
     return (
-      <Screen title="Air Glove">
+      <Screen title="Not Supported" gridClass="device-grid">
         <UnsupportedView />
       </Screen>
     );
@@ -215,10 +215,9 @@ function InfoRow({
 function UnsupportedView() {
   return (
     <div className="device-stage">
-      <Artwork variant="device" stateClass="artwork-offline" />
-      <p className="device-caption device-caption-error">
-        Web Bluetooth isn't available here. Use Chrome, Edge, Brave, or
-        another Chromium-based browser.
+      <Artwork variant="device" stateClass="artwork-error artwork-offline" />
+      <p className="device-error">
+        Web Bluetooth not supported. Use Chrome, Edge, or Brave.
       </p>
     </div>
   );
