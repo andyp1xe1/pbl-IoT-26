@@ -17,11 +17,11 @@
 namespace {
 
 motion_config_t s_cfg = {
-    /* mix_x_milli  */ { 0, 0, 0, 0, 0, 0,    0, +1000, -1000 },
-    /* mix_y_milli  */ { 0, 0, 0, 0, 0, 0, -1700,     0,     0 },
+    /* mix_x_milli  */ { 0, +50, 0, 0, 0, 0,     0, +1000, 0 },
+    /* mix_y_milli  */ { +50, 0, 0, 0, 0, 0, +1000,     0, 0 },
     /* sens_x_milli */ 1000,
     /* sens_y_milli */ 1000,
-    /* deadzone_rad */ 0.004f,
+    /* deadzone_rad */ 0.015f,
 };
 bool  s_clutch = false;
 float s_dx_ema = 0.0f;

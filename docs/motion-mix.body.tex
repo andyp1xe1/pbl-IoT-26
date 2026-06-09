@@ -1,0 +1,28 @@
+\begin{aligned}
+\mathbf{s} \;&=\; \begin{bmatrix}\boldsymbol{\omega}\\[2pt]\mathbf{a}\\[2pt]\boldsymbol{\rho}\end{bmatrix} \in \mathbb{R}^{9},
+\qquad
+\boldsymbol{\rho} \;=\;
+\begin{cases}
+2\,\mathrm{Im}\!\bigl(q_{t-1}^{-1}\otimes q_{t}\bigr) & \text{Madgwick on}\\[2pt]
+\mathbf{0} & \text{otherwise}
+\end{cases}\\[10pt]
+\begin{bmatrix} x \\ y \end{bmatrix} \;&=\;
+\frac{1}{10^{6}}
+\underbrace{\begin{bmatrix} \sigma_{x} & 0 \\ 0 & \sigma_{y} \end{bmatrix}}_{\text{sensitivity}}
+\underbrace{\begin{bmatrix} \mathbf{w}_{x}^{\top}\\[2pt] \mathbf{w}_{y}^{\top}\end{bmatrix}}_{2\times 9\ \text{mix}}
+\mathbf{s},
+\qquad \mathbf{w}_{x},\mathbf{w}_{y}\in[-2000,2000]^{9}\\[10pt]
+r \;&=\; \sqrt{x^{2}+y^{2}},
+\qquad
+\begin{bmatrix} x'\\ y'\end{bmatrix}
+\;=\;
+\max\!\Bigl(0,\;\tfrac{r-d}{r}\Bigr)
+\begin{bmatrix} x\\ y\end{bmatrix}\\[10pt]
+g(v) \;&=\; \mathrm{sgn}(v)\bigl(k_{\text{lo}}\,\lvert v\rvert + \lvert v\rvert^{\,k_{\text{exp}}}\bigr),
+\qquad k_{\text{lo}}=600,\; k_{\text{exp}}=1.2\\[10pt]
+e_{t}^{\,x,y} \;&=\; \alpha\,g\!\bigl(x',y'\bigr)\;+\;(1-\alpha)\,e_{t-1}^{\,x,y},
+\qquad \alpha = 0.22\\[10pt]
+\begin{bmatrix}\Delta x\\ \Delta y\end{bmatrix}
+\;&=\;
+\mathrm{clamp}_{\pm 127}\!\Bigl(\bigl\lfloor e_{t}^{\,x,y}\bigr\rceil\Bigr)\;\in\;\{-127,\dots,127\}^{2}
+\end{aligned}

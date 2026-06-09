@@ -234,64 +234,157 @@ body {
   align-items: start;
 }
 
-/* Tune screen: explicit named-area grid so Pointer + Fusion live in a left
- * column, the taller Touch card spans both rows on the right, and Click
- * mapping sits on its own full-width row below. Avoids the auto-fit
- * cascade that left Click mapping orphaned in row 2 with empty space. */
+/* Tune screen: three full-width stacked sections.
+ *   1. Controls strip (dead zone + debounce on one compact row)
+ *   2. Motion-mix matrix (the hero)
+ *   3. Buttons (live touch + threshold + click action, per finger)
+ * The grid is single-column at every breakpoint — the visual rhythm
+ * relies on each card occupying the full content width and reading
+ * top-to-bottom. */
 .tune-layout {
   display: grid;
   gap: 22px;
   grid-template-columns: 1fr;
   grid-template-areas:
-    "pointer"
+    "controls"
     "mix"
-    "fusion"
-    "touch"
-    "click";
+    "buttons";
   align-items: start;
 }
 
-.tune-pointer { grid-area: pointer; }
-.tune-mix     { grid-area: mix;     }
-.tune-fusion  { grid-area: fusion;  }
-.tune-touch   { grid-area: touch;   }
-.tune-click   { grid-area: click;   }
+.tune-controls { grid-area: controls; }
+.tune-mix      { grid-area: mix;      }
+.tune-buttons  { grid-area: buttons;  }
 
 @media (min-width: 900px) {
   .tune-layout {
-    gap: 28px 32px;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-    grid-template-areas:
-      "pointer touch"
-      "mix     mix"
-      "fusion  touch"
-      "click   click";
+    gap: 28px;
   }
 }
 
-/* ---------- Motion mix ---------- */
-
-.motion-mix-head {
-  display: flex;
+/* Compact controls strip: dead zone + debounce share one card, each
+ * a single horizontal row (label · slider · value) instead of the
+ * default two-line slider-row. Tightens vertical sprawl up top. */
+.tune-controls-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.tune-controls-card > .slider-row {
+  display: grid;
+  grid-template-columns: minmax(80px, auto) minmax(0, 1fr) minmax(56px, auto);
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: none;
+}
+.tune-controls-card > .slider-row + .slider-row {
+  border-left: 1px solid var(--border);
+}
+.tune-controls-card .slider-head {
+  display: contents;
+}
+.tune-controls-card .slider-head .row-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.tune-controls-card .slider-head .row-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.tune-controls-card .slider-row > input[type="range"] {
+  margin: 0;
+}
+@media (max-width: 599px) {
+  .tune-controls-card {
+    grid-template-columns: 1fr;
+  }
+  .tune-controls-card > .slider-row + .slider-row {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
 }
 
-.motion-mix-caption {
-  margin: 0 0 16px;
+/* ---------- Motion mix ----------
+ *
+ * Full-width matrix card. Fusion controls (β + Madgwick toggle) sit
+ * in the card's own header bar so the whole "how fusion is wired"
+ * story reads in one place. No big titles or caption — the column
+ * heads and group labels carry enough context. */
+
+.motion-mix {
+  width: 100%;
+}
+
+.mix-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mix-beta-inline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.mix-beta-inline input[type="range"] {
+  margin: 0;
+  width: 100%;
+}
+.mix-beta-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.mix-beta-value {
   font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: right;
+}
+.mix-beta-inline input[type="range"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.motion-mix-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.mix-card {
+  padding: 0;
+}
+.mix-card > .mix-grid {
+  padding: 14px 22px 16px;
 }
 
 .mix-grid {
   display: grid;
-  grid-template-columns: minmax(110px, 0.6fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 4px 12px;
+  grid-template-columns: minmax(120px, 0.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 28px;
+  row-gap: 4px;
   align-items: center;
 }
 
+/* Sub-band header: groups the 9 axes into "Raw IMU" and "Fused" bands
+ * so the wire-stable ordering reads as two named blocks instead of one
+ * undifferentiated stack of nine. */
 .mix-grid-head {
   display: contents;
 }
@@ -301,19 +394,59 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  text-align: center;
-  margin-bottom: 4px;
+  padding-bottom: 6px;
+  align-self: end;
+}
+
+.mix-group-label {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  text-transform: uppercase;
+  padding-bottom: 6px;
+}
+
+.mix-band-sep {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--border);
+  margin: 14px 0 4px;
+}
+
+.mix-grid-head-sub > .mix-group-label {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.mix-group-hint {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 .mix-row {
   display: contents;
 }
+.mix-row > .mix-axis-label,
+.mix-row > .bipolar {
+  padding-block: 6px;
+  border-top: 1px solid var(--border);
+}
+/* First row in a band: no top border (the band header already separated). */
+.mix-row:first-of-type > .mix-axis-label,
+.mix-row:first-of-type > .bipolar,
+.mix-grid-head-sub + .mix-row > .mix-axis-label,
+.mix-grid-head-sub + .mix-row > .bipolar {
+  border-top: none;
+}
 
 .mix-axis-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
-  padding: 8px 0;
 }
 
 .mix-row-dim .mix-axis-label,
@@ -321,23 +454,36 @@ body {
   opacity: 0.42;
 }
 
-/* ---------- Bipolar slider ---------- */
+
+/* ---------- Bipolar slider ----------
+ *
+ * Layout: 2-column grid (control · value). The control is the only thing
+ * the <input type="range"> covers, so the native thumb's horizontal
+ * position is computed against the actual track width — not the whole
+ * row. Track and input share the control box; the styled track sits
+ * below, the native input is layered on top with everything but the
+ * thumb made transparent. */
 
 .bipolar {
-  --bp-thumb: 50%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.bipolar-control {
   --bp-fill-start: 50%;
   --bp-fill-end: 50%;
-
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 52px;
+  height: 22px;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 0;
 }
 
 .bipolar-track {
   position: relative;
+  width: 100%;
   height: 6px;
   border-radius: 999px;
   background: var(--border);
@@ -367,18 +513,23 @@ body {
   opacity: 0.55;
 }
 
-/* Native range input on top — invisible track, only the thumb is shown so
- * the styled track underneath becomes the visible bar. */
 .bipolar input[type="range"] {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
   width: 100%;
   height: 100%;
   margin: 0;
+  padding: 0;
   background: transparent;
   -webkit-appearance: none;
   appearance: none;
   cursor: ew-resize;
+}
+.bipolar input[type="range"]:focus {
+  outline: none;
 }
 .bipolar input[type="range"]::-webkit-slider-runnable-track {
   background: transparent;
@@ -398,8 +549,7 @@ body {
   border-radius: 50%;
   background: var(--surface);
   border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.15);
-  margin-top: -6px;
+  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.20);
   cursor: ew-resize;
 }
 .bipolar input[type="range"]::-moz-range-thumb {
@@ -408,7 +558,7 @@ body {
   border-radius: 50%;
   background: var(--surface);
   border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.15);
+  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.20);
   cursor: ew-resize;
 }
 
@@ -423,11 +573,12 @@ body {
 }
 
 .bipolar-value {
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 600;
   text-align: right;
-  color: var(--text);
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .bipolar-zero .bipolar-value {
   color: var(--muted);
@@ -797,45 +948,66 @@ input[type="range"] {
   border-bottom: none;
 }
 
-/* Grouped (bar + threshold slider) cell in the Tune screen Touch card.
- * One border per pad group, not per row, so the bar and the slider read
- * as a single control unit. */
-.touch-tune {
-  padding: 12px 4px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.touch-tune:last-child {
-  border-bottom: none;
-}
-
-.touch-tune .touch-row {
-  padding-bottom: 4px;
-}
-
-.touch-tune-thresh {
-  display: flex;
+/* Tune-screen Buttons card: per-finger row with four cells —
+ *   [name] [live bar] [threshold slider] [click action]
+ * — so the user sees the whole story for one finger on one row
+ * instead of cross-referencing two separate cards. */
+.buttons-head,
+.button-row {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1.1fr) minmax(0, 1fr) minmax(176px, auto);
   align-items: center;
-  gap: 12px;
-  padding: 0 16px 0 74px; /* left indent matches .touch-label width + gap */
+  gap: 18px;
+  padding: 10px 18px;
 }
 
-.touch-tune-thresh-label {
+.buttons-head {
+  padding-top: 14px;
+  padding-bottom: 6px;
+}
+.buttons-col-label {
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  width: 70px;
-  flex-shrink: 0;
+}
+.buttons-col-label:last-of-type {
+  padding-left: 6px;
 }
 
-.touch-tune-thresh input[type="range"] {
+.button-row {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.button-row-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.button-row .touch-row {
+  padding: 0;
+}
+.button-row .touch-label {
+  display: none;
+}
+.button-row .touch-track {
   flex: 1;
-  min-width: 0;
 }
 
-.touch-tune-thresh-value {
-  width: 42px;
+.button-row-thresh {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 10px;
+}
+.button-row-thresh input[type="range"] {
+  width: 100%;
+}
+.button-row-thresh-value {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-size: 13px;

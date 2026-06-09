@@ -15,6 +15,13 @@ import { store, useAppState } from "../state/store";
 
 const CAPTION = "Adjust sensitivity, touch thresholds, and click mappings.";
 
+/* Cap-pad raw counts sit in the 0–~200 band (idle ~50–100, finger contact
+ * pulls toward zero). The legacy 4095 ceiling came from the swing-button
+ * thumb assumption; with cap pads everywhere the bar saturated and the
+ * threshold marker pinned to the right edge. 300 leaves headroom for noisy
+ * baselines without throwing away resolution. */
+const TOUCH_BAR_MAX = 300;
+
 const PRIMARY_OPTIONS: ClickAction[] = [
   ClickAction.None,
   ClickAction.Left,
@@ -51,82 +58,66 @@ function TuneBody() {
 
   return (
     <>
-      <Section title="Pointer" className="tune-pointer">
-        <Slider
-          label="Sensitivity X"
-          min={200}
-          max={3000}
-          step={10}
-          value={cfg.sensXMilli}
-          display={`${(cfg.sensXMilli / 1000).toFixed(2)}×`}
-          onChange={(v) => store.updateConfigLocal({ sensXMilli: v })}
-        />
-        <Slider
-          label="Sensitivity Y"
-          min={200}
-          max={3000}
-          step={10}
-          value={cfg.sensYMilli}
-          display={`${(cfg.sensYMilli / 1000).toFixed(2)}×`}
-          onChange={(v) => store.updateConfigLocal({ sensYMilli: v })}
-        />
-        <Slider
-          label="Dead zone"
-          min={0}
-          max={300}
-          step={1}
-          value={cfg.deadzoneMrad}
-          display={`${(cfg.deadzoneMrad / 1000).toFixed(3)} rad`}
-          onChange={(v) => store.updateConfigLocal({ deadzoneMrad: v })}
-        />
-      </Section>
+      <section className="section tune-controls">
+        <div className="section-head">
+          <h2 className="section-title">Controls</h2>
+        </div>
+        <div className="card tune-controls-card">
+          <Slider
+            label="Dead zone"
+            min={0}
+            max={300}
+            step={1}
+            value={cfg.deadzoneMrad}
+            display={`${(cfg.deadzoneMrad / 1000).toFixed(3)} rad`}
+            onChange={(v) => store.updateConfigLocal({ deadzoneMrad: v })}
+          />
+          <Slider
+            label="Debounce"
+            min={5}
+            max={200}
+            step={1}
+            value={cfg.debounceMs}
+            display={`${cfg.debounceMs} ms`}
+            onChange={(v) => store.updateConfigLocal({ debounceMs: v })}
+          />
+        </div>
+      </section>
 
-      <Section title="Motion mix" className="tune-mix">
-        <MotionMix cfg={cfg} onChange={(patch) => store.updateConfigLocal(patch)} />
-      </Section>
+      <MotionMix
+        cfg={cfg}
+        onChange={(patch) => store.updateConfigLocal(patch)}
+        className="tune-mix"
+      />
 
-      <Section title="Fusion & input" className="tune-fusion">
-        <Slider
-          label="Madgwick β"
-          min={0}
-          max={300}
-          step={1}
-          value={cfg.madgwickBetaMilli}
-          display={`${(cfg.madgwickBetaMilli / 1000).toFixed(3)}`}
-          onChange={(v) => store.updateConfigLocal({ madgwickBetaMilli: v })}
-        />
-        <Slider
-          label="Debounce"
-          min={5}
-          max={200}
-          step={1}
-          value={cfg.debounceMs}
-          display={`${cfg.debounceMs} ms`}
-          onChange={(v) => store.updateConfigLocal({ debounceMs: v })}
-        />
-      </Section>
-
-      <Section title="Touch — live & thresholds" className="tune-touch">
+      <Section title="Buttons" className="tune-buttons">
+        <div className="buttons-head">
+          <span />
+          <span className="buttons-col-label">Live</span>
+          <span className="buttons-col-label">Threshold</span>
+          <span className="buttons-col-label">Action</span>
+        </div>
         {PAD_NAMES.map((name, i) => {
           const live = s.telemetry?.touch[i] ?? 0;
           const thresh = cfg.touchThreshold[i];
           return (
-            <div key={name} className="touch-tune">
+            <div key={name} className="button-row">
+              <span className="button-row-label">{name}</span>
               <TouchBar
-                label={name}
+                label=""
                 value={live}
                 threshold={thresh}
-                max={4095}
+                max={TOUCH_BAR_MAX}
                 invert
               />
-              <div className="touch-tune-thresh">
-                <span className="touch-tune-thresh-label">Threshold</span>
+              <div className="button-row-thresh">
                 <input
                   type="range"
                   min={1}
-                  max={4095}
-                  step={10}
+                  max={TOUCH_BAR_MAX}
+                  step={1}
                   value={thresh}
+                  aria-label={`${name} threshold`}
                   onChange={(e) => {
                     const arr = [
                       ...cfg.touchThreshold,
@@ -135,19 +126,8 @@ function TuneBody() {
                     store.updateConfigLocal({ touchThreshold: arr });
                   }}
                 />
-                <span className="touch-tune-thresh-value">{thresh}</span>
+                <span className="button-row-thresh-value">{thresh}</span>
               </div>
-            </div>
-          );
-        })}
-      </Section>
-
-      <Section title="Click mapping" className="tune-click">
-        {PAD_NAMES.map((name, i) => (
-          <Row
-            key={name}
-            label={name}
-            value={
               <ActionSelect
                 value={cfg.clickAction[i]}
                 options={PRIMARY_OPTIONS}
@@ -157,9 +137,9 @@ function TuneBody() {
                   store.updateConfigLocal({ clickAction: arr });
                 }}
               />
-            }
-          />
-        ))}
+            </div>
+          );
+        })}
 
         <Row
           label="Modifier finger"

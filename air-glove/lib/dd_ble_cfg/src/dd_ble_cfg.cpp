@@ -43,15 +43,17 @@ constexpr size_t  kStatusSize    = 4;
  * the sens_x/y multipliers, so users can dial both via the UI later.
  *
  * mix_x layout (one entry per AG_MIX_*):
- *   {gx=0, gy=0, gz=0, ax=0, ay=0, az=0, roll=0, pitch=+1000, yaw=-1000}
+ *   {gx=0, gy=+50, gz=0, ax=0, ay=0, az=0, roll=0, pitch=+1000, yaw=0}
  * mix_y:
- *   {gx=0, gy=0, gz=0, ax=0, ay=0, az=0, roll=-1000, pitch=0, yaw=0}                       */
+ *   {gx=+50, gy=0, gz=0, ax=0, ay=0, az=0, roll=+1000, pitch=0, yaw=0}
+ * Fused Pitch/Roll do the work; a small raw gyro feed-forward adds the
+ * leading-edge "snap" that fusion lag would otherwise smooth out. */
 const dd_ble_cfg_t kBuiltinDefaults = {
     /* sens_x_milli        */ 1000,
     /* sens_y_milli        */ 1000,
-    /* deadzone_mrad       */ 4,
-    /* madgwick_beta_milli */ 50,    /* matches existing srv_fusion_init(0.05f) */
-    /* debounce_ms         */ 15,    /* 2 sample ticks @10ms — catches bench wire taps */
+    /* deadzone_mrad       */ 15,   /* radial dz in the mixed plane                     */
+    /* madgwick_beta_milli */ 145,  /* responsive but still filters wrist vibration     */
+    /* debounce_ms         */ 15,   /* 2 sample ticks @10ms — catches bench wire taps   */
     /* touch_threshold[]   */ {20, 20, 20, 20},   /* empirical safe cap-pad fire point */
     /* click_action[]      */ {
         AG_CLICK_NONE,         /* THUMB  — unused by default                       */
@@ -62,8 +64,8 @@ const dd_ble_cfg_t kBuiltinDefaults = {
     /* modifier_pad        */ AG_NO_MODIFIER,
     /* click_action_alt[]  */ {AG_CLICK_NONE, AG_CLICK_NONE, AG_CLICK_NONE},
     /* madgwick_enabled    */ 1,
-    /* mix_x_milli[]       */ { 0, 0, 0, 0, 0, 0,    0, +1000, -1000 },
-    /* mix_y_milli[]       */ { 0, 0, 0, 0, 0, 0, -1000,     0,     0 },
+    /* mix_x_milli[]       */ { 0, +50, 0, 0, 0, 0,     0, +1000, 0 },
+    /* mix_y_milli[]       */ { +50, 0, 0, 0, 0, 0, +1000,     0, 0 },
 };
 
 static dd_ble_cfg_t   s_cfg              = kBuiltinDefaults;

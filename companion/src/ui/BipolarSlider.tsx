@@ -23,43 +23,46 @@ export function BipolarSlider({
   step?: number;
   ariaLabel: string;
 }) {
-  const pct = ((value - min) / (max - min)) * 100;
-  const fillPct = (value / max) * 50;       // distance from centre, signed
+  const fillPct = (value / max) * 50;          // signed distance from centre
   const fillStart = Math.min(50, 50 + fillPct);
   const fillEnd = Math.max(50, 50 + fillPct);
+  /* Sub-50 step means the lane is tuned in the 0.00x range (e.g. raw gyro
+   * weights), so two decimals would round 0.005 to "0.01" and hide the
+   * resolution the slider just gained. */
+  const decimals = step < 50 ? 3 : 2;
   return (
-    <div
-      className={"bipolar" + (value === 0 ? " bipolar-zero" : "")}
-      style={
-        {
-          /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-          "--bp-thumb": `${pct}%`,
-          "--bp-fill-start": `${fillStart}%`,
-          "--bp-fill-end": `${fillEnd}%`,
-        } as React.CSSProperties
-      }
-    >
-      <div className="bipolar-track" aria-hidden="true">
-        <span className="bipolar-fill" />
-        <span className="bipolar-center" />
+    <div className={"bipolar" + (value === 0 ? " bipolar-zero" : "")}>
+      <div
+        className="bipolar-control"
+        style={
+          {
+            "--bp-fill-start": `${fillStart}%`,
+            "--bp-fill-end": `${fillEnd}%`,
+          } as React.CSSProperties
+        }
+      >
+        <div className="bipolar-track" aria-hidden="true">
+          <span className="bipolar-fill" />
+          <span className="bipolar-center" />
+        </div>
+        <input
+          type="range"
+          aria-label={ariaLabel}
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          onDoubleClick={() => onChange(0)}
+        />
       </div>
-      <input
-        type="range"
-        aria-label={ariaLabel}
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        onDoubleClick={() => onChange(0)}
-      />
-      <span className="bipolar-value">{formatMilli(value)}</span>
+      <span className="bipolar-value">{formatMilli(value, decimals)}</span>
     </div>
   );
 }
 
-function formatMilli(v: number): string {
+function formatMilli(v: number, decimals: number): string {
   if (v === 0) return "0";
   const sign = v > 0 ? "+" : "−";
-  return `${sign}${(Math.abs(v) / 1000).toFixed(2)}`;
+  return `${sign}${(Math.abs(v) / 1000).toFixed(decimals)}`;
 }

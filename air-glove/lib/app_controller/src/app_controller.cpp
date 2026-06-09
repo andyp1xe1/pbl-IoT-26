@@ -60,16 +60,16 @@ static TaskEntry s_tasks[7] = {
 
 static TimerHandle_t s_heartbeat_timer = nullptr;
 
-/* Boot-time motion mapping: equivalent to the dd_ble_cfg built-in defaults
- * (pitch+yaw → dx, roll → dy with 1.7× boost), so cursor behaviour at the
- * "Air Glove just powered on" instant matches what the companion will read
- * back from NVS once t_motion picks up the persisted config. */
+/* Boot-time motion mapping: must mirror dd_ble_cfg::kBuiltinDefaults so the
+ * "Air Glove just powered on" cursor behaviour matches what the companion
+ * will read back from NVS once t_motion picks up the persisted config.
+ * Pitch/Roll fused do the bulk; small raw gyro feed-forward adds snap. */
 static const motion_config_t kDefaultMotionCfg = {
-    /* mix_x_milli  */ { 0, 0, 0, 0, 0, 0,    0, +1000, -1000 },
-    /* mix_y_milli  */ { 0, 0, 0, 0, 0, 0, -1700,     0,     0 },
+    /* mix_x_milli  */ { 0, +50, 0, 0, 0, 0,     0, +1000, 0 },
+    /* mix_y_milli  */ { +50, 0, 0, 0, 0, 0, +1000,     0, 0 },
     /* sens_x_milli */ 1000,
     /* sens_y_milli */ 1000,
-    /* deadzone_rad */ 0.004f,
+    /* deadzone_rad */ 0.015f,
 };
 
 static const char *state_name(int s)
@@ -170,12 +170,12 @@ extern "C" ag_result_t app_controller_start(void)
 
     /* ── 2. Services (cannot fail on valid inputs) ──────────────────── */
     printf("[app_controller] init services\n");
-    /* beta=0.05: Madgwick's recommended base is 0.033 for IMU-only; 0.05 gives
-     * a small extra margin against gyro bias drift without the "sticky /
-     * fighting-back" feel that 0.15 caused during slow tilts. The motion-aware
-     * guard in srv_fusion already suppresses accel correction during fast
-     * movements, so beta only matters in the near-static regime. */
-    (void)srv_fusion_init(0.05f);
+    /* beta=0.145: matches dd_ble_cfg::kBuiltinDefaults.madgwick_beta_milli so
+     * boot-time fusion behaviour lines up with the value t_fusion will apply
+     * once it picks up the persisted config. Higher than the historic 0.05
+     * because the dual-lane mix (small raw gyro feed-forward + fused tail)
+     * benefits from a livelier fusion estimate. */
+    (void)srv_fusion_init(0.145f);
     (void)srv_motion_init(&kDefaultMotionCfg);
     (void)srv_input_init(15);
 

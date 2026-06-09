@@ -188,8 +188,8 @@ export function defaultConfig(): AgConfig {
     flags: 0,
     sensXMilli: 1000,
     sensYMilli: 1000,
-    deadzoneMrad: 4,
-    madgwickBetaMilli: 50,
+    deadzoneMrad: 15,
+    madgwickBetaMilli: 145,
     debounceMs: 15,
     touchThreshold: [20, 20, 20, 20],
     clickAction: [
@@ -201,9 +201,12 @@ export function defaultConfig(): AgConfig {
     modifierPad: NO_MODIFIER,
     clickActionAlt: [ClickAction.None, ClickAction.None, ClickAction.None],
     madgwickEnabled: true,
-    /* Defaults reproduce the pre-mix-matrix behaviour: pitch+yaw → cursor X
-     * with yaw inverted, roll → cursor Y with the historic 1.7× boost. */
-    mixX: [0, 0, 0, 0, 0, 0, 0, +1000, -1000],
-    mixY: [0, 0, 0, 0, 0, 0, -1700, 0, 0],
+    /* Pitch (fused) → cursor X, Roll (fused) → cursor Y, both at unit gain.
+     * A small raw gyro feed-forward (Gyro Y → X, Gyro X → Y at +0.05) adds
+     * the leading-edge "snap" that fusion lag would otherwise smooth out;
+     * keep these two layers paired when re-tuning. Must mirror
+     * dd_ble_cfg::kBuiltinDefaults so first-boot and post-NVS match. */
+    mixX: [0, +50, 0, 0, 0, 0, 0, +1000, 0],
+    mixY: [+50, 0, 0, 0, 0, 0, +1000, 0, 0],
   };
 }
