@@ -2,8 +2,8 @@
 #define AG_PINS_H
 
 /* I2C pins for the MPU6050. Matches docs/srs/hardware.md. */
-#define AG_PIN_I2C_SDA   21
-#define AG_PIN_I2C_SCL   22
+#define AG_PIN_I2C_SDA   22
+#define AG_PIN_I2C_SCL   21
 
 /* Capacitive touch channel numbers (ESP32 touch_pad_t indices).
  * Physical GPIOs in parentheses. Thumb is the common reference. */

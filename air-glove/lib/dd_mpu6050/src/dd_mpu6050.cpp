@@ -103,12 +103,25 @@ extern "C" ag_result_t dd_mpu6050_read(imu_sample_t *out) {
     const int16_t gy_raw = (int16_t)((uint16_t)b[10] << 8 | b[11]);
     const int16_t gz_raw = (int16_t)((uint16_t)b[12] << 8 | b[13]);
 
-    out->ax   = (float)ax_raw * s_accel_scale_mps2;
-    out->ay   = (float)ay_raw * s_accel_scale_mps2;
-    out->az   = (float)az_raw * s_accel_scale_mps2;
-    out->gx   = (float)gx_raw * s_gyro_scale_rads;
-    out->gy   = (float)gy_raw * s_gyro_scale_rads;
-    out->gz   = (float)gz_raw * s_gyro_scale_rads;
+    /* Axis remap for the 90° board rotation on the glove mount.
+     * Re-expresses board-frame samples in the glove frame so that
+     * srv_fusion / srv_motion can keep their original axis conventions.
+     *   glove_x =  board_y
+     *   glove_y = -board_z
+     *   glove_z = -board_x      (chosen to keep the basis right-handed) */
+    const float ax_b = (float)ax_raw * s_accel_scale_mps2;
+    const float ay_b = (float)ay_raw * s_accel_scale_mps2;
+    const float az_b = (float)az_raw * s_accel_scale_mps2;
+    const float gx_b = (float)gx_raw * s_gyro_scale_rads;
+    const float gy_b = (float)gy_raw * s_gyro_scale_rads;
+    const float gz_b = (float)gz_raw * s_gyro_scale_rads;
+
+    out->ax   =  ay_b;
+    out->ay   = -az_b;
+    out->az   = -ax_b;
+    out->gx   =  gy_b;
+    out->gy   = -gz_b;
+    out->gz   = -gx_b;
     out->t_us = (uint64_t)esp_timer_get_time();
 
     return AG_OK;
