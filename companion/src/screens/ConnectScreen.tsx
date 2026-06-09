@@ -1,5 +1,6 @@
 import { Row, Section } from "../ui/Section";
 import { Screen } from "../ui/Screen";
+import { EmptyState } from "../ui/EmptyState";
 import { store, useAppState } from "../state/store";
 import { TELEMETRY_FLAG_HID_CONNECTED } from "../ble/types";
 
@@ -13,10 +14,37 @@ export function ConnectScreen() {
   if (!s.webBluetoothAvailable) {
     return (
       <Screen title="Connect">
-        <Section>
-          <Row label="Web Bluetooth" value="Not available" />
-          <p className="section-footer">Open this page in Chrome or Edge.</p>
-        </Section>
+        <EmptyState
+          title="Unsupported browser"
+          caption="Use Chrome, Edge, Brave, or another Chromium-based browser."
+        />
+      </Screen>
+    );
+  }
+
+  if (!connected) {
+    const failed = s.error != null && s.status !== "connecting";
+    return (
+      <Screen title="Connect">
+        <EmptyState
+          title={
+            s.status === "connecting"
+              ? "Connecting…"
+              : failed
+                ? "Couldn't connect"
+                : "Not connected"
+          }
+          error={failed ? s.error : null}
+          action={
+            <button
+              className="btn btn-primary"
+              disabled={s.status === "connecting"}
+              onClick={() => void store.connect()}
+            >
+              {failed ? "Try again" : "Connect"}
+            </button>
+          }
+        />
       </Screen>
     );
   }
@@ -26,47 +54,24 @@ export function ConnectScreen() {
       <Section title="Device">
         <Row
           label="Air Glove"
+          value={<StatusPill status="Connected" tone="good" />}
+        />
+        <Row
+          label="Mouse"
           value={
             <StatusPill
-              status={
-                s.status === "connecting"
-                  ? "Connecting"
-                  : connected
-                    ? "Connected"
-                    : "Not connected"
-              }
-              tone={connected ? "good" : s.status === "connecting" ? "warn" : "off"}
+              status={hidActive ? "Active" : "Idle"}
+              tone={hidActive ? "good" : "off"}
             />
           }
         />
-        {connected && (
-          <Row
-            label="Mouse"
-            value={
-              <StatusPill
-                status={hidActive ? "Active" : "Idle"}
-                tone={hidActive ? "good" : "off"}
-              />
-            }
-          />
-        )}
         <div className="card-actions">
-          {!connected ? (
-            <button
-              className="btn btn-primary"
-              disabled={s.status === "connecting"}
-              onClick={() => void store.connect()}
-            >
-              Connect
-            </button>
-          ) : (
-            <button
-              className="btn btn-ghost-danger"
-              onClick={() => void store.disconnect()}
-            >
-              Disconnect
-            </button>
-          )}
+          <button
+            className="btn btn-ghost-danger"
+            onClick={() => void store.disconnect()}
+          >
+            Disconnect
+          </button>
         </div>
         {s.error && <p className="section-footer error-text">{s.error}</p>}
       </Section>

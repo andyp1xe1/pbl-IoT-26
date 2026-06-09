@@ -2,6 +2,7 @@ import { Command, StatusState } from "../ble/types";
 import { Row, Section } from "../ui/Section";
 import { Screen } from "../ui/Screen";
 import { StatBox, StatGrid } from "../ui/StatBox";
+import { EmptyState } from "../ui/EmptyState";
 import { store, useAppState } from "../state/store";
 
 export function CalibrateScreen() {
@@ -14,9 +15,18 @@ export function CalibrateScreen() {
   if (!connected) {
     return (
       <Screen title="Calibrate">
-        <Section>
-          <Row label="Not connected" />
-        </Section>
+        <EmptyState
+          title="Not connected"
+          action={
+            <button
+              className="btn btn-primary"
+              disabled={s.status === "connecting"}
+              onClick={() => void store.connect()}
+            >
+              Connect
+            </button>
+          }
+        />
       </Screen>
     );
   }

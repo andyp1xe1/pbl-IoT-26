@@ -10,6 +10,7 @@ import { Row, Section } from "../ui/Section";
 import { Screen } from "../ui/Screen";
 import { Slider } from "../ui/Slider";
 import { TouchBar } from "../ui/TouchBar";
+import { EmptyState } from "../ui/EmptyState";
 import { store, useAppState } from "../state/store";
 
 const PRIMARY_OPTIONS: ClickAction[] = [
@@ -36,9 +37,18 @@ export function TuneScreen() {
   if (!connected) {
     return (
       <Screen title="Tune">
-        <Section>
-          <Row label="Not connected" />
-        </Section>
+        <EmptyState
+          title="Not connected"
+          action={
+            <button
+              className="btn btn-primary"
+              disabled={s.status === "connecting"}
+              onClick={() => void store.connect()}
+            >
+              Connect
+            </button>
+          }
+        />
       </Screen>
     );
   }

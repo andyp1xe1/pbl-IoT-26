@@ -4,6 +4,36 @@ import {
   decodeTelemetry,
   encodeConfig,
 } from "./codec";
+import { log } from "./log";
+
+/** Phase of the connect handshake — used by the store to pick a friendly
+ *  message that actually matches what failed. NotFoundError alone is
+ *  ambiguous: the spec uses it for scan-cancelled, scan-empty,
+ *  service-missing, and characteristic-missing. */
+export type ConnectPhase =
+  | "scan"           // navigator.bluetooth.requestDevice()
+  | "link"           // device.gatt.connect()
+  | "service"        // server.getPrimaryService()
+  | "characteristic" // svc.getCharacteristic()
+  | "notify";        // startNotifications()
+
+export class BleConnectError extends Error {
+  constructor(
+    public phase: ConnectPhase,
+    public cause: Error,
+  ) {
+    super(cause.message);
+    this.name = "BleConnectError";
+  }
+}
+
+async function withPhase<T>(phase: ConnectPhase, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    throw new BleConnectError(phase, err as Error);
+  }
+}
 import {
   AgConfig,
   AgStatus,
@@ -59,6 +89,7 @@ export class AirGloveClient implements IAirGloveClient {
 
   async connect(): Promise<void> {
     if (!isWebBluetoothAvailable()) {
+      log.error("navigator.bluetooth is undefined — browser lacks Web Bluetooth");
       throw new Error("Web Bluetooth is not available in this browser.");
     }
     this.emitConnection("connecting");
@@ -66,37 +97,67 @@ export class AirGloveClient implements IAirGloveClient {
       // Filter by name, not service UUID: the glove advertises as a HID mouse
       // and does not put the 128-bit config service UUID in its (size-limited)
       // advertisement. The custom service is discovered after connecting.
-      this.device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: "AirGlove" }],
-        optionalServices: [CONFIG_SERVICE, DIS_SERVICE, BATTERY_SERVICE],
+      log.step("requestDevice", { namePrefix: "AirGlove" });
+      this.device = await withPhase("scan", () =>
+        navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: "AirGlove" }],
+          optionalServices: [CONFIG_SERVICE, DIS_SERVICE, BATTERY_SERVICE],
+        }),
+      );
+      log.info("device picked", { name: this.device.name, id: this.device.id });
+
+      this.device.addEventListener("gattserverdisconnected", () => {
+        log.warn("gattserverdisconnected — link dropped");
+        this.emitConnection("disconnected");
       });
-      this.device.addEventListener("gattserverdisconnected", () =>
-        this.emitConnection("disconnected"),
+
+      log.step("gatt.connect");
+      const server = await withPhase("link", () => this.device!.gatt!.connect());
+      this.server = server;
+      log.info("GATT connected");
+
+      log.step("getPrimaryService", CONFIG_SERVICE);
+      const svc = await withPhase("service", () =>
+        server.getPrimaryService(CONFIG_SERVICE),
       );
 
-      const server = await this.device.gatt!.connect();
-      this.server = server;
+      log.step("getCharacteristic", "config + command");
+      this.configChar = await withPhase("characteristic", () =>
+        svc.getCharacteristic(CONFIG_CHAR),
+      );
+      this.commandChar = await withPhase("characteristic", () =>
+        svc.getCharacteristic(COMMAND_CHAR),
+      );
 
-      const svc = await server.getPrimaryService(CONFIG_SERVICE);
-      this.configChar = await svc.getCharacteristic(CONFIG_CHAR);
-      this.commandChar = await svc.getCharacteristic(COMMAND_CHAR);
-
-      const telemetry = await svc.getCharacteristic(TELEMETRY_CHAR);
+      log.step("subscribe telemetry");
+      const telemetry = await withPhase("characteristic", () =>
+        svc.getCharacteristic(TELEMETRY_CHAR),
+      );
       telemetry.addEventListener("characteristicvaluechanged", (e) => {
         const dv = (e.target as BluetoothRemoteGATTCharacteristic).value;
         if (dv) this.telemetryCbs.forEach((cb) => cb(decodeTelemetry(dv)));
       });
-      await telemetry.startNotifications();
+      await withPhase("notify", () => telemetry.startNotifications());
 
-      const status = await svc.getCharacteristic(STATUS_CHAR);
+      log.step("subscribe status");
+      const status = await withPhase("characteristic", () =>
+        svc.getCharacteristic(STATUS_CHAR),
+      );
       status.addEventListener("characteristicvaluechanged", (e) => {
         const dv = (e.target as BluetoothRemoteGATTCharacteristic).value;
         if (dv) this.statusCbs.forEach((cb) => cb(decodeStatus(dv)));
       });
-      await status.startNotifications();
+      await withPhase("notify", () => status.startNotifications());
 
+      log.info("connect complete");
       this.emitConnection("connected");
     } catch (err) {
+      const e = err as Error;
+      if (err instanceof BleConnectError) {
+        log.error(`connect failed at "${err.phase}": ${err.cause.name}`, err.cause);
+      } else {
+        log.error("connect failed", e);
+      }
       this.emitConnection("disconnected");
       throw err;
     }

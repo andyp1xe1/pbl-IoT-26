@@ -1,13 +1,21 @@
-import { useState } from "react";
 import { AboutScreen } from "./screens/AboutScreen";
 import { CalibrateScreen } from "./screens/CalibrateScreen";
 import { ConnectScreen } from "./screens/ConnectScreen";
 import { TuneScreen } from "./screens/TuneScreen";
 import { ConnectionChip } from "./ui/ConnectionChip";
-import { Nav, TabId } from "./ui/TabBar";
+import { Nav } from "./ui/TabBar";
+import { store, useAppState } from "./state/store";
+
+function AppVersion() {
+  return (
+    <span className="app-version" aria-label="App version">
+      v{import.meta.env.VITE_APP_VERSION ?? "0.1.0"}
+    </span>
+  );
+}
 
 export default function App() {
-  const [tab, setTab] = useState<TabId>("connect");
+  const tab = useAppState().tab;
 
   return (
     <div className="app">
@@ -16,15 +24,19 @@ export default function App() {
           <span className="brand-mark">AIR</span>
           <span className="brand-mark">GLOVE</span>
         </div>
-        <Nav active={tab} onChange={setTab} variant="side" />
+        <Nav active={tab} onChange={store.setTab} variant="side" />
         <div className="sidebar-foot">
           <ConnectionChip />
+          <AppVersion />
         </div>
       </aside>
 
       <header className="topbar">
         <span className="brand-inline">AIR GLOVE</span>
-        <ConnectionChip />
+        <div className="topbar-right">
+          <AppVersion />
+          <ConnectionChip />
+        </div>
       </header>
 
       <main className="content">
@@ -36,7 +48,7 @@ export default function App() {
         </div>
       </main>
 
-      <Nav active={tab} onChange={setTab} variant="bottom" />
+      <Nav active={tab} onChange={store.setTab} variant="bottom" />
     </div>
   );
 }

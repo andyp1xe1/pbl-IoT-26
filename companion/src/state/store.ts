@@ -1,5 +1,9 @@
 import { useSyncExternalStore } from "react";
-import { AirGloveClient, isWebBluetoothAvailable } from "../ble/client";
+import {
+  AirGloveClient,
+  BleConnectError,
+  isWebBluetoothAvailable,
+} from "../ble/client";
 import {
   AgConfig,
   AgStatus,
@@ -10,6 +14,7 @@ import {
   IAirGloveClient,
   defaultConfig,
 } from "../ble/types";
+import type { TabId } from "../ui/TabBar";
 
 export interface AppState {
   webBluetoothAvailable: boolean;
@@ -20,6 +25,7 @@ export interface AppState {
   telemetry: AgTelemetry | null;
   lastStatus: AgStatus | null;
   deviceInfo: DeviceInfo | null;
+  tab: TabId;
 }
 
 class Store {
@@ -32,6 +38,7 @@ class Store {
     telemetry: null,
     lastStatus: null,
     deviceInfo: null,
+    tab: "connect",
   };
 
   private client: IAirGloveClient = this.makeClient();
@@ -62,12 +69,23 @@ class Store {
     this.listeners.forEach((fn) => fn());
   }
 
+  setTab = (tab: TabId) => {
+    this.patch({ tab });
+  };
+
   async connect() {
+    // Anything that prevents the user from completing a connect here belongs
+    // on the Connect tab where there's a full error/retry surface. Either
+    // case below routes them there.
+    if (!this.state.webBluetoothAvailable) {
+      this.patch({ tab: "connect" });
+      return;
+    }
     this.patch({ error: null });
     try {
       await this.client.connect();
     } catch (err) {
-      this.patch({ error: errorMessage(err) });
+      this.patch({ error: errorMessage(err), tab: "connect" });
     }
   }
 
@@ -124,10 +142,54 @@ class Store {
   }
 }
 
+/** Map a connect-time failure to a short user-facing line. The raw error
+ *  is logged separately via the ble/log helper. NotFoundError is heavily
+ *  overloaded by the Web Bluetooth spec — its meaning depends on *which*
+ *  step rejected, hence the phase-aware branches. */
 function errorMessage(err: unknown): string {
+  if (err instanceof BleConnectError) {
+    const cause = err.cause;
+    const name = cause.name;
+    const msg = cause.message || "";
+
+    switch (err.phase) {
+      case "scan":
+        if (name === "NotFoundError") {
+          if (/cancel/i.test(msg)) return "Cancelled.";
+          return "No glove found. Make sure it's powered on and nearby.";
+        }
+        if (name === "SecurityError") return "Blocked by the browser.";
+        break;
+
+      case "link":
+        if (name === "NetworkError") {
+          return "Couldn't link. Move closer, check the battery, or disconnect it from another host.";
+        }
+        return `Couldn't link: ${msg || name}.`;
+
+      case "service":
+        if (name === "NotFoundError") {
+          return "This device's firmware is too old.";
+        }
+        return msg || name;
+
+      case "characteristic":
+        if (name === "NotFoundError") {
+          return "This device's firmware is incomplete.";
+        }
+        return msg || name;
+
+      case "notify":
+        return `Couldn't subscribe: ${msg || name}.`;
+    }
+    return msg || name;
+  }
+
   if (err instanceof Error) {
-    if (err.name === "NotFoundError") return "No device selected.";
-    return err.message;
+    if (err.name === "InvalidStateError")
+      return "Bluetooth is off. Turn it on and retry.";
+    if (err.name === "AbortError") return "Cancelled.";
+    return err.message || err.name;
   }
   return String(err);
 }
