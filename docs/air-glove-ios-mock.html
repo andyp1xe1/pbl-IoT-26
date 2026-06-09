@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Air Glove — iOS App Mock</title>
+<style>
+  :root {
+    --bg: #f2f2f7;
+    --card: #ffffff;
+    --sep: #c6c6c8;
+    --label: #000000;
+    --sublabel: #3c3c4399;
+    --accent: #007aff;
+    --destructive: #ff3b30;
+    --green: #34c759;
+    --gray: #8e8e93;
+    --group-label: #6d6d72;
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #e5e5ea;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--label);
+    font-size: 17px;
+  }
+  .page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  h1.page-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  p.page-sub {
+    margin: 0 0 24px;
+    color: var(--group-label);
+    font-size: 14px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 24px;
+  }
+
+  /* iPhone frame */
+  .phone {
+    width: 390px;
+    height: 780px;
+    margin: 0 auto;
+    background: #000;
+    border-radius: 44px;
+    padding: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    position: relative;
+  }
+  .screen {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    border-radius: 34px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .notch {
+    position: absolute;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 120px; height: 28px;
+    background: #000;
+    border-radius: 18px;
+    z-index: 10;
+  }
+
+  /* Status bar */
+  .statusbar {
+    height: 44px;
+    flex: 0 0 44px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 28px 0 28px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .statusbar .right { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+
+  /* Nav bar */
+  .navbar {
+    flex: 0 0 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: var(--bg);
+  }
+  .navbar .title { font-size: 17px; font-weight: 600; }
+  .navbar .btn { color: var(--accent); font-size: 17px; cursor: pointer; }
+  .navbar .btn.bold { font-weight: 600; }
+
+  /* Large title variant */
+  .large-title {
+    padding: 4px 20px 8px;
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+  }
+
+  /* Content area */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0 24px;
+  }
+  .group-label {
+    text-transform: uppercase;
+    font-size: 13px;
+    color: var(--group-label);
+    padding: 16px 20px 6px;
+    font-weight: 400;
+  }
+  .group-footer {
+    font-size: 13px;
+    color: var(--group-label);
+    padding: 6px 20px 8px;
+    line-height: 1.35;
+  }
+
+  .list {
+    background: var(--card);
+    margin: 0 16px;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    padding: 11px 16px;
+    min-height: 44px;
+    border-bottom: 0.5px solid var(--sep);
+    background: var(--card);
+  }
+  .row:last-child { border-bottom: none; }
+  .row .label { flex: 1; font-size: 17px; }
+  .row .value { color: var(--sublabel); font-size: 17px; margin-right: 6px; }
+  .row .chev { color: #c4c4c6; font-size: 17px; font-weight: 600; }
+  .row.tappable { cursor: pointer; }
+  .row .icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    color: #fff;
+    font-size: 15px;
+    margin-right: 12px;
+    flex: 0 0 28px;
+  }
+  .icon.blue { background: var(--accent); }
+  .icon.gray { background: var(--gray); }
+  .icon.green { background: var(--green); }
+  .icon.red { background: var(--destructive); }
+  .icon.orange { background: #ff9500; }
+
+  /* Switch */
+  .switch {
+    width: 51px; height: 31px;
+    background: var(--green);
+    border-radius: 16px;
+    position: relative;
+    flex: 0 0 51px;
+  }
+  .switch.off { background: #e9e9eb; }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 2px; left: 22px;
+    width: 27px; height: 27px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  }
+  .switch.off::after { left: 2px; }
+
+  /* Slider */
+  .slider-row { display: block; padding: 12px 16px; }
+  .slider-row .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .slider-row .name { font-size: 17px; }
+  .slider-row .reading { font-size: 15px; color: var(--sublabel); font-variant-numeric: tabular-nums; }
+  .track {
+    height: 4px;
+    background: #e9e9eb;
+    border-radius: 2px;
+    position: relative;
+  }
+  .track .fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  .track .thumb {
+    position: absolute;
+    top: 50%;
+    width: 28px; height: 28px;
+    background: #fff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    border: 0.5px solid #d1d1d6;
+  }
+
+  /* Bar gauge (live touch) */
+  .gauge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 0.5px solid var(--sep);
+  }
+  .gauge:last-child { border-bottom: none; }
+  .gauge .pad-name { width: 70px; font-size: 15px; }
+  .gauge .bar {
+    flex: 1;
+    height: 8px;
+    background: #e9e9eb;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .gauge .bar .level {
+    height: 100%;
+    background: var(--green);
+    border-radius: 4px;
+  }
+  .gauge .bar .thresh {
+    position: absolute;
+    top: -2px;
+    width: 2px;
+    height: 12px;
+    background: var(--destructive);
+  }
+  .gauge .read {
+    width: 56px;
+    text-align: right;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--sublabel);
+  }
+
+  /* Button rows */
+  .row.action { justify-content: center; color: var(--accent); font-size: 17px; cursor: pointer; }
+  .row.action.destructive { color: var(--destructive); }
+  .row.action.bold { font-weight: 600; }
+
+  /* Tab bar */
+  .tabbar {
+    flex: 0 0 84px;
+    border-top: 0.5px solid var(--sep);
+    background: rgba(247,247,247,0.94);
+    display: flex;
+    padding: 6px 0 28px;
+  }
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--gray);
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .tab.active { color: var(--accent); }
+  .tab .glyph { font-size: 22px; line-height: 1; }
+
+  /* Status dot */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.green { background: var(--green); }
+  .dot.gray { background: var(--gray); }
+
+  /* Frame caption */
+  .caption {
+    text-align: center;
+    color: var(--group-label);
+    font-size: 13px;
+    margin-top: 12px;
+  }
+
+  /* IMU mini panel */
+  .kv {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    padding: 12px 16px;
+    border-bottom: 0.5px solid var(--sep);
+  }
+  .kv .cell { text-align: center; }
+  .kv .cell .k { font-size: 11px; color: var(--group-label); text-transform: uppercase; }
+  .kv .cell .v { font-size: 16px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+  /* Scan list rows */
+  .device-row .meta {
+    display: flex; flex-direction: column;
+    flex: 1;
+  }
+  .device-row .name { font-size: 17px; }
+  .device-row .sub { font-size: 13px; color: var(--sublabel); }
+  .rssi { font-size: 13px; color: var(--sublabel); margin-right: 6px; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1 class="page-title">Air Glove — iOS Companion App</h1>
+  <p class="page-sub">UI mock · SwiftUI / UIKit style · iOS 17 system look</p>
+
+  <div class="grid">
+
+    <!-- ============ Screen 1: Devices / Scan ============ -->
+    <div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="statusbar">
+          <div>9:41</div>
+          <div class="right"><span>􀙇</span><span>􀛨</span><span>􀛪</span></div>
+        </div>
+        <div class="navbar">
+          <div class="btn">Edit</div>
+          <div class="title">Devices</div>
+          <div class="btn bold">+</div>
+        </div>
+        <div class="content">
+          <div class="large-title">Devices</div>
+
+          <div class="group-label">Paired</div>
+          <div class="list">
+            <div class="row device-row tappable">
+              <div class="icon blue">􀱔</div>
+              <div class="meta">
+                <div class="name">Air Glove · Left</div>
+                <div class="sub"><span class="dot green"></span> Connected · Battery 87%</div>
+              </div>
+              <div class="chev">›</div>
+            </div>
+            <div class="row device-row tappable">
+              <div class="icon gray">􀱔</div>
+              <div class="meta">
+                <div class="name">Air Glove · Right</div>
+                <div class="sub"><span class="dot gray"></span> Not in range</div>
+              </div>
+              <div class="chev">›</div>
+            </div>
+          </div>
+
+          <div class="group-label">Nearby</div>
+          <div class="list">
+            <div class="row device-row tappable">
+              <div class="meta">
+                <div class="name">AG-7F3A</div>
+                <div class="sub">Unpaired · v0.4.2</div>
+              </div>
+              <div class="rssi">−58 dBm</div>
+              <div class="chev">›</div>
+            </div>
+            <div class="row device-row tappable">
+              <div class="meta">
+                <div class="name">AG-A11C</div>
+                <div class="sub">Unpaired · v0.4.2</div>
+              </div>
+              <div class="rssi">−71 dBm</div>
+              <div class="chev">›</div>
+            </div>
+            <div class="row action">Scan again</div>
+          </div>
+
+          <div class="group-footer">
+            Air Glove uses Bluetooth Low Energy. Keep the device within ~3 meters during pairing.
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab active"><div class="glyph">􀱔</div><div>Devices</div></div>
+          <div class="tab"><div class="glyph">􀛭</div><div>Tune</div></div>
+          <div class="tab"><div class="glyph">􀊫</div><div>Calibrate</div></div>
+          <div class="tab"><div class="glyph">􀍢</div><div>More</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">1 · Scan &amp; pair</div>
+    </div>
+
+    <!-- ============ Screen 2: Tune (sliders + live touch) ============ -->
+    <div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="statusbar">
+          <div>9:41</div>
+          <div class="right"><span>􀙇</span><span>􀛨</span><span>􀛪</span></div>
+        </div>
+        <div class="navbar">
+          <div class="btn">‹ Devices</div>
+          <div class="title">Left Glove</div>
+          <div class="btn bold">Save</div>
+        </div>
+        <div class="content">
+
+          <div class="group-label">Pointer</div>
+          <div class="list">
+            <div class="slider-row">
+              <div class="head"><div class="name">Sensitivity X</div><div class="reading">1.40×</div></div>
+              <div class="track"><div class="fill" style="width:62%"></div><div class="thumb" style="left:62%"></div></div>
+            </div>
+            <div class="slider-row" style="border-top:0.5px solid var(--sep)">
+              <div class="head"><div class="name">Sensitivity Y</div><div class="reading">1.20×</div></div>
+              <div class="track"><div class="fill" style="width:54%"></div><div class="thumb" style="left:54%"></div></div>
+            </div>
+            <div class="slider-row" style="border-top:0.5px solid var(--sep)">
+              <div class="head"><div class="name">Dead zone</div><div class="reading">0.08 rad/s</div></div>
+              <div class="track"><div class="fill" style="width:18%"></div><div class="thumb" style="left:18%"></div></div>
+            </div>
+          </div>
+
+          <div class="group-label">Touch — Live</div>
+          <div class="list">
+            <div class="gauge">
+              <div class="pad-name">Thumb</div>
+              <div class="bar"><div class="level" style="width:14%"></div><div class="thresh" style="left:60%"></div></div>
+              <div class="read">142</div>
+            </div>
+            <div class="gauge">
+              <div class="pad-name">Index</div>
+              <div class="bar"><div class="level" style="width:72%; background:var(--destructive)"></div><div class="thresh" style="left:60%"></div></div>
+              <div class="read">681</div>
+            </div>
+            <div class="gauge">
+              <div class="pad-name">Middle</div>
+              <div class="bar"><div class="level" style="width:22%"></div><div class="thresh" style="left:55%"></div></div>
+              <div class="read">208</div>
+            </div>
+            <div class="gauge">
+              <div class="pad-name">Ring</div>
+              <div class="bar"><div class="level" style="width:18%"></div><div class="thresh" style="left:55%"></div></div>
+              <div class="read">171</div>
+            </div>
+          </div>
+          <div class="group-footer">
+            Red marker shows the click threshold. Tap a row to set it from the current reading.
+          </div>
+
+          <div class="list">
+            <div class="row tappable">
+              <div class="label">Click mapping</div>
+              <div class="value">Index → Left</div>
+              <div class="chev">›</div>
+            </div>
+            <div class="row tappable">
+              <div class="label">Advanced</div>
+              <div class="chev">›</div>
+            </div>
+          </div>
+
+          <div class="list" style="margin-top:24px">
+            <div class="row action destructive">Reset to defaults</div>
+          </div>
+
+        </div>
+        <div class="tabbar">
+          <div class="tab"><div class="glyph">􀱔</div><div>Devices</div></div>
+          <div class="tab active"><div class="glyph">􀛭</div><div>Tune</div></div>
+          <div class="tab"><div class="glyph">􀊫</div><div>Calibrate</div></div>
+          <div class="tab"><div class="glyph">􀍢</div><div>More</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">2 · Tune parameters · live telemetry</div>
+    </div>
+
+    <!-- ============ Screen 3: Calibrate ============ -->
+    <div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="statusbar">
+          <div>9:41</div>
+          <div class="right"><span>􀙇</span><span>􀛨</span><span>􀛪</span></div>
+        </div>
+        <div class="navbar">
+          <div class="btn">‹ Left Glove</div>
+          <div class="title">Calibrate</div>
+          <div class="btn">&nbsp;</div>
+        </div>
+        <div class="content">
+
+          <div class="group-label">IMU — Live</div>
+          <div class="list">
+            <div class="kv">
+              <div class="cell"><div class="k">Accel X</div><div class="v">−0.02</div></div>
+              <div class="cell"><div class="k">Accel Y</div><div class="v">+0.01</div></div>
+              <div class="cell"><div class="k">Accel Z</div><div class="v">+9.79</div></div>
+            </div>
+            <div class="kv">
+              <div class="cell"><div class="k">Gyro X</div><div class="v">+0.003</div></div>
+              <div class="cell"><div class="k">Gyro Y</div><div class="v">−0.001</div></div>
+              <div class="cell"><div class="k">Gyro Z</div><div class="v">+0.002</div></div>
+            </div>
+            <div class="row">
+              <div class="label">Sample rate</div>
+              <div class="value">100 Hz</div>
+            </div>
+          </div>
+
+          <div class="group-label">Procedure</div>
+          <div class="list">
+            <div class="row">
+              <div class="icon green">1</div>
+              <div class="label">Place glove flat on a table</div>
+            </div>
+            <div class="row">
+              <div class="icon green">2</div>
+              <div class="label">Hold still for 3 seconds</div>
+            </div>
+            <div class="row">
+              <div class="icon gray">3</div>
+              <div class="label">Tap Calibrate below</div>
+            </div>
+          </div>
+
+          <div class="list" style="margin-top:16px">
+            <div class="row action bold">Calibrate IMU</div>
+            <div class="row action">Recalibrate touch baseline</div>
+          </div>
+
+          <div class="group-label">Last calibration</div>
+          <div class="list">
+            <div class="row">
+              <div class="label">IMU offsets</div>
+              <div class="value">2026-06-04</div>
+            </div>
+            <div class="row">
+              <div class="label">Touch baseline</div>
+              <div class="value">2026-06-04</div>
+            </div>
+          </div>
+
+          <div class="group-footer">
+            Calibration values are stored on the glove and persist across power cycles.
+          </div>
+
+        </div>
+        <div class="tabbar">
+          <div class="tab"><div class="glyph">􀱔</div><div>Devices</div></div>
+          <div class="tab"><div class="glyph">􀛭</div><div>Tune</div></div>
+          <div class="tab active"><div class="glyph">􀊫</div><div>Calibrate</div></div>
+          <div class="tab"><div class="glyph">􀍢</div><div>More</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">3 · Calibration</div>
+    </div>
+
+    <!-- ============ Screen 4: Device details / More ============ -->
+    <div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="statusbar">
+          <div>9:41</div>
+          <div class="right"><span>􀙇</span><span>􀛨</span><span>􀛪</span></div>
+        </div>
+        <div class="navbar">
+          <div class="btn">‹ Left Glove</div>
+          <div class="title">Device</div>
+          <div class="btn">&nbsp;</div>
+        </div>
+        <div class="content">
+
+          <div class="group-label">Status</div>
+          <div class="list">
+            <div class="row">
+              <div class="label">Connection</div>
+              <div class="value"><span class="dot green"></span> Connected</div>
+            </div>
+            <div class="row">
+              <div class="label">Battery</div>
+              <div class="value">87%</div>
+            </div>
+            <div class="row">
+              <div class="label">Signal</div>
+              <div class="value">−54 dBm</div>
+            </div>
+          </div>
+
+          <div class="group-label">Firmware</div>
+          <div class="list">
+            <div class="row">
+              <div class="label">Version</div>
+              <div class="value">0.4.2</div>
+            </div>
+            <div class="row">
+              <div class="label">Config schema</div>
+              <div class="value">v3</div>
+            </div>
+            <div class="row tappable">
+              <div class="label">Check for updates</div>
+              <div class="chev">›</div>
+            </div>
+          </div>
+
+          <div class="group-label">Identification</div>
+          <div class="list">
+            <div class="row">
+              <div class="label">Name</div>
+              <div class="value">Left Glove</div>
+            </div>
+            <div class="row">
+              <div class="label">MAC</div>
+              <div class="value">A4:CF:12:7F:3A:01</div>
+            </div>
+            <div class="row">
+              <div class="label">Hardware</div>
+              <div class="value">ESP32-DevKit · rev B</div>
+            </div>
+          </div>
+
+          <div class="list" style="margin-top:24px">
+            <div class="row action">Reboot device</div>
+          </div>
+          <div class="list" style="margin-top:24px">
+            <div class="row action destructive">Forget this device</div>
+          </div>
+
+          <div class="group-footer">
+            Air Glove · PBL IoT 2026
+          </div>
+
+        </div>
+        <div class="tabbar">
+          <div class="tab"><div class="glyph">􀱔</div><div>Devices</div></div>
+          <div class="tab"><div class="glyph">􀛭</div><div>Tune</div></div>
+          <div class="tab"><div class="glyph">􀊫</div><div>Calibrate</div></div>
+          <div class="tab active"><div class="glyph">􀍢</div><div>More</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">4 · Device info &amp; firmware</div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
