@@ -1,0 +1,174 @@
+#+TITLE: Air Glove Code Overview
+#+AUTHOR: OpenAI
+#+OPTIONS: toc:2 num:nil
+#+HTML_HEAD: <style>
+#+HTML_HEAD: body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; color: #24292f; background: #ffffff; }
+#+HTML_HEAD: #content { max-width: 860px; margin: 40px auto; padding: 0 24px; }
+#+HTML_HEAD: .title { text-align: left; font-size: 2.2rem; margin-bottom: 0.25rem; }
+#+HTML_HEAD: h1, h2, h3, h4 { color: #1f2328; margin-top: 1.5em; margin-bottom: 0.6em; }
+#+HTML_HEAD: h2 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
+#+HTML_HEAD: p, li { font-size: 16px; }
+#+HTML_HEAD: code, pre { font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; }
+#+HTML_HEAD: code { background: #f6f8fa; padding: 0.15em 0.35em; border-radius: 6px; }
+#+HTML_HEAD: pre { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 16px; overflow-x: auto; }
+#+HTML_HEAD: table { border-collapse: collapse; }
+#+HTML_HEAD: th, td { border: 1px solid #d0d7de; padding: 6px 12px; }
+#+HTML_HEAD: a { color: #0969da; text-decoration: none; }
+#+HTML_HEAD: a:hover { text-decoration: underline; }
+#+HTML_HEAD: ul, ol { padding-left: 1.5em; }
+#+HTML_HEAD: </style>
+
+* What it is
+An ESP32/PlatformIO firmware project for an /air mouse glove/ that:
+- reads MPU6050 IMU motion
+- reads capacitive touch pads on fingers
+- fuses orientation
+- maps motion to mouse cursor deltas
+- sends them as a BLE HID mouse
+
+* Top-level structure
+- =air-glove/platformio.ini= :: build and test configuration
+- =air-glove/src/main.cpp= :: tiny boot entry point
+- =air-glove/lib/app_config/= :: shared types and pin definitions
+- =air-glove/lib/dd_*/= :: hardware and device drivers
+- =air-glove/lib/srv_*/= :: pure logic services
+- =air-glove/lib/app_controller/= :: orchestration and RTOS tasks
+- =air-glove/test/= :: unit and smoke tests
+
+* Architecture
+The code is cleanly layered.
+
+** 1. Config and shared types
+- =lib/app_config/include/ag_types.h=
+  - core result codes
+  - =imu_sample_t=
+  - =touch_sample_t=
+  - =hid_mouse_report_t=
+- =lib/app_config/include/ag_pins.h=
+  - ESP32 I2C pins
+  - touch channel mapping
+
+** 2. Drivers (=dd_*=)
+Hardware-facing and ESP32/Arduino-specific.
+
+- =lib/dd_mpu6050/=
+  - =dd_mpu6050_init()= configures MPU6050 over I2C
+  - =dd_mpu6050_read()= returns accel/gyro in SI units
+- =lib/dd_touch/=
+  - calibrates baselines
+  - reads capacitive touch values
+  - computes a =touched_mask=
+- =lib/dd_ble_hid/=
+  - sets up NimBLE HID mouse service
+  - advertises as ="AirGlove"=
+  - sends 4-byte mouse reports
+
+** 3. Services (=srv_*=)
+Pure C++ logic, intentionally host-testable.
+
+- =lib/srv_fusion/=
+  - Madgwick-style 6-axis fusion
+  - IMU sample to quaternion
+- =lib/srv_motion/=
+  - quaternion delta to =dx/dy=
+  - deadzone, gain curve, cap, clutch support
+- =lib/srv_input/=
+  - per-pad debounce FSM
+  - touch mask to press/release events
+
+** 4. App controller
+- =lib/app_controller/src/app_controller.cpp=
+  - initializes drivers and services
+  - creates queues
+  - starts 6 FreeRTOS tasks
+- =lib/app_controller/src/tasks.cpp=
+  - task bodies and dataflow
+
+* Runtime dataflow
+Main pipeline in =tasks.cpp=:
+
+1. =t_imu_sample=
+   - polls MPU6050 at 100 Hz
+   - pushes =imu_sample_t= to =q_imu=
+
+2. =t_fusion=
+   - consumes IMU data
+   - runs =srv_fusion_update=
+   - pushes quaternion and timestamp to =q_orientation=
+
+3. =t_touch=
+   - polls touch pads at 100 Hz
+   - runs =srv_input_process=
+   - pushes button events to =q_buttons=
+
+4. =t_motion=
+   - consumes orientation
+   - runs =srv_motion_update=
+   - creates HID motion reports
+   - pushes to =q_hid=
+
+5. =t_app=
+   - consumes touch/button events
+   - maps index/middle pads to left/right mouse buttons
+   - updates shared button state
+   - pushes button-only HID reports
+
+6. =t_ble_hid=
+   - owns the top-level BLE FSM
+   - waits for connection
+   - drains/coalesces =q_hid=
+   - sends reports at about 125 Hz max
+
+* Entry point
+- =src/main.cpp=
+  - prints a boot log and calls =app_controller_start()=
+  - actual work happens in RTOS tasks
+
+This keeps =main.cpp= tiny while the application logic lives in the controller and task layers.
+
+* Build and test setup
+=platformio.ini= defines:
+
+** =env:esp32dev=
+- actual firmware target
+- Arduino framework
+- NimBLE dependency
+
+** =env:native=
+- host-side tests for =srv_*=
+- deliberately excludes =dd_*= and =app_controller=
+- reinforces separation between hardware code and pure logic
+
+* Testing
+Good coverage for the pure logic libraries:
+
+- =test/test_srv_fusion/=
+  - convergence, stability, free-fall, null args, performance sanity
+- =test/test_srv_motion/=
+  - deadzone, sign, monotonicity, clutch, saturation
+- =test/test_srv_input/=
+  - debounce, glitch filtering, press/release correctness
+- =test/test_app_controller/=
+  - on-device smoke test for startup, tasks, and queues
+
+* Notable strengths
+- Strong layering
+  - =srv_*= code is pure and testable
+  - hardware dependencies are isolated in =dd_*=
+- Clear RTOS pipeline
+  - queues between stages
+  - task responsibilities are easy to follow
+- Good comments and intent documentation
+- Defensive behavior
+  - init failures reboot
+  - queue overflow uses drop-oldest
+  - motion and fusion guard against bad inputs
+
+* Implementation notes
+- =dd_ble_hid_send()= comment says it returns =AG_ERR_STATE= when not connected, but the implementation silently returns =AG_OK= when disconnected.
+- =srv_motion= uses a small-angle approximation from quaternion delta; that is fine for small frame-to-frame motion, but less exact for large jumps.
+- =srv_input= contains placeholders for future chord support, but Phase I only emits simple press/release events.
+- =dd_touch= updates baseline only while not touched, which helps avoid drift during contact.
+
+* Summary
+=air-glove/= is a well-structured ESP32 firmware project that turns IMU orientation and finger touch input into a BLE HID mouse, with a clean split between drivers, pure logic services, and RTOS orchestration.
