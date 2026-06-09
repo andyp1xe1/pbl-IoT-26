@@ -68,6 +68,7 @@ typedef struct {
 /* Telemetry flag bits. */
 #define DD_BLE_CFG_TFLAG_HID_CONNECTED  0x01
 #define DD_BLE_CFG_TFLAG_CALIBRATING    0x02
+#define DD_BLE_CFG_TFLAG_SLEEPING       0x04   /* device is in low-power soft-sleep */
 
 /* Command opcodes (host writes these to the Command characteristic). */
 #define DD_BLE_CFG_CMD_NONE             0x00
@@ -75,6 +76,15 @@ typedef struct {
 #define DD_BLE_CFG_CMD_RECAL_TOUCH      0x02
 #define DD_BLE_CFG_CMD_SAVE             0x03
 #define DD_BLE_CFG_CMD_FACTORY_RESET    0x04
+#define DD_BLE_CFG_CMD_SLEEP            0x05   /* enter soft-sleep (BLE link stays up) */
+#define DD_BLE_CFG_CMD_WAKE             0x06   /* exit soft-sleep, resume mouse reports */
+/* Telemetry rate hints. Companion sends one of these as the active tab
+ * changes, so we publish only what's actually being watched. Idle for
+ * the Home tab (only the SLEEPING flag matters), Normal for Tune (touch
+ * bars), Fast for Calibrate (live IMU readouts). */
+#define DD_BLE_CFG_CMD_TELE_IDLE        0x07   /* ~4 Hz  (250 ms) */
+#define DD_BLE_CFG_CMD_TELE_NORMAL      0x08   /* ~15 Hz (66 ms)  */
+#define DD_BLE_CFG_CMD_TELE_FAST        0x09   /* ~20 Hz (50 ms)  */
 
 /* Command status states (mirrored to the host on the Status characteristic). */
 #define DD_BLE_CFG_ST_IDLE      0

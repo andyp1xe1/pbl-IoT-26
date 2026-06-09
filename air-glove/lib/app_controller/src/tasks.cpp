@@ -142,9 +142,17 @@ void t_imu_sample_fn(void *)
 {
     TickType_t        last   = xTaskGetTickCount();
     const TickType_t  period = pdMS_TO_TICKS(10);
-    uint32_t          count  = 0;
 
     for (;;) {
+        /* Soft-sleep: MPU is powered down (dd_mpu6050_set_sleep) so a read
+         * would return stale data anyway. Idle at 2 Hz so the wake transition
+         * still picks up promptly without burning CPU on a tight delay loop. */
+        if (g_sleeping.load()) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+            last = xTaskGetTickCount();
+            continue;
+        }
+
         imu_sample_t s;
         ag_result_t rc = dd_mpu6050_read(&s);
         if (rc == AG_OK) {
@@ -159,14 +167,6 @@ void t_imu_sample_fn(void *)
             g_tele_gyro_mdps[0].store(sat_i16(s.gx * 57295.7795f));
             g_tele_gyro_mdps[1].store(sat_i16(s.gy * 57295.7795f));
             g_tele_gyro_mdps[2].store(sat_i16(s.gz * 57295.7795f));
-
-            /* Log actual sensor values once per second (every 100 reads). */
-            if (++count % 100 == 0) {
-                printf("[imu] accel=[%+5.2f %+5.2f %+5.2f] m/s²  "
-                       "gyro=[%+6.3f %+6.3f %+6.3f] rad/s\n",
-                       (double)s.ax, (double)s.ay, (double)s.az,
-                       (double)s.gx, (double)s.gy, (double)s.gz);
-            }
         } else {
             printf("[imu] read error rc=%d\n", rc);
         }
@@ -177,7 +177,6 @@ void t_imu_sample_fn(void *)
 /* ── t_fusion — q_imu → Madgwick → q_orientation ──────────────────────── */
 void t_fusion_fn(void *)
 {
-    uint32_t count = 0;
     uint32_t applied_cfg_version = 0;
 
     for (;;) {
@@ -201,19 +200,6 @@ void t_fusion_fn(void *)
         if (srv_fusion_update(&s, &f.q) != AG_OK) continue;
         f.t_us = s.t_us;
         queue_put_drop_oldest(q_orientation, &f);
-
-        /* Log Euler angles once per second (every 100 fused frames). */
-        if (++count % 100 == 0) {
-            const quat_t &q = f.q;
-            const float kRad2Deg = 57.2957795f;
-            float roll  = atan2f(2.0f*(q.q0*q.q1 + q.q2*q.q3),
-                                 1.0f - 2.0f*(q.q1*q.q1 + q.q2*q.q2)) * kRad2Deg;
-            float pitch = asinf( 2.0f*(q.q0*q.q2 - q.q3*q.q1))        * kRad2Deg;
-            float yaw   = atan2f(2.0f*(q.q0*q.q3 + q.q1*q.q2),
-                                 1.0f - 2.0f*(q.q2*q.q2 + q.q3*q.q3)) * kRad2Deg;
-            printf("[fusion] roll=%+6.1f  pitch=%+6.1f  yaw=%+6.1f  deg\n",
-                   (double)roll, (double)pitch, (double)yaw);
-        }
     }
 }
 
@@ -242,6 +228,12 @@ void t_touch_fn(void *)
                    c.debounce_ms);
         }
 
+        /* Soft-sleep: keep the touch sensor running so g_tele_touch_raw still
+         * updates for the companion's Tune screen, but throttle to 2 Hz and
+         * suppress event emission so a pad accidentally grazed while the glove
+         * is set down can't queue a phantom click. */
+        const bool sleeping = g_sleeping.load();
+
         touch_sample_t s;
         if (dd_touch_read(&s) == AG_OK) {
             /* Snapshot raw pad readings for the companion-app telemetry. */
@@ -249,23 +241,54 @@ void t_touch_fn(void *)
                 g_tele_touch_raw[i].store(s.raw[i]);
             }
 
-            /* Log raw touch values every 2 s so you can see live readings
-             * vs thresholds — useful for diagnosing wire contact issues. */
-            if (++count % 200 == 0) {
-                printf("[touch] raw  thumb:%4u  index:%4u  middle:%4u  "
-                       "mask=0x%02X\n",
-                       s.raw[0], s.raw[1], s.raw[2], s.touched_mask);
+            /* Edge-triggered raw log: print as soon as ANY pad changes
+             * meaningfully (button: any flip, cap: ≥20 count delta), so
+             * bench-testing bare wires gives instant feedback instead of
+             * waiting for the 2-second heartbeat window. The heartbeat
+             * stays so the user can see the values when idle too. */
+            static uint16_t last_raw[TOUCH_PAD_COUNT] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
+            static const char *kPadName[TOUCH_PAD_COUNT] =
+                {"thumb", "index", "middle", "ring"};
+            static const uint8_t kPadGpio[TOUCH_PAD_COUNT] = {4, 14, 15, 13};
+            for (int i = 0; i < TOUCH_PAD_COUNT; ++i) {
+                int delta = (int)s.raw[i] - (int)last_raw[i];
+                int adelta = delta < 0 ? -delta : delta;
+                /* Buttons swing 4095↔0 so any change is significant; cap pad
+                 * drifts with EMA so require a real step. */
+                int threshold = (i == TOUCH_PAD_THUMB) ? 20 : 1000;
+                if (adelta >= threshold) {
+                    printf("[touch] %s (GPIO%u): %u -> %u\n",
+                           kPadName[i], kPadGpio[i],
+                           last_raw[i], s.raw[i]);
+                    last_raw[i] = s.raw[i];
+                }
             }
 
-            input_event_t evts[TOUCH_PAD_COUNT];
-            size_t n = 0;
-            if (srv_input_process(&s, evts, TOUCH_PAD_COUNT, &n) == AG_OK) {
-                for (size_t i = 0; i < n; ++i) {
-                    queue_put_drop_oldest(q_buttons, &evts[i]);
+            /* 2 s heartbeat — keeps the live values visible even when
+             * nothing is changing, so you can sanity-check the baseline. */
+            if (++count % 200 == 0) {
+                printf("[touch] raw  thumb:%4u  index:%4u  middle:%4u  "
+                       "ring:%4u  mask=0x%02X\n",
+                       s.raw[0], s.raw[1], s.raw[2], s.raw[3],
+                       s.touched_mask);
+            }
+
+            if (!sleeping) {
+                input_event_t evts[TOUCH_PAD_COUNT];
+                size_t n = 0;
+                if (srv_input_process(&s, evts, TOUCH_PAD_COUNT, &n) == AG_OK) {
+                    for (size_t i = 0; i < n; ++i) {
+                        queue_put_drop_oldest(q_buttons, &evts[i]);
+                    }
                 }
             }
         }
-        vTaskDelayUntil(&last, period);
+        if (sleeping) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+            last = xTaskGetTickCount();
+        } else {
+            vTaskDelayUntil(&last, period);
+        }
     }
 }
 
@@ -286,6 +309,11 @@ void t_motion_fn(void *)
     for (;;) {
         oriented_frame_t f;
         if (xQueueReceive(q_orientation, &f, portMAX_DELAY) != pdTRUE) continue;
+
+        /* Soft-sleep: drop any frame already in flight when sleep was entered.
+         * t_imu_sample stops producing once g_sleeping flips so the queue will
+         * drain on its own; this just guards the race window. */
+        if (g_sleeping.load()) continue;
 
         /* Apply companion-app config changes from this (the owning) task, so
          * srv_motion stays single-threaded per its contract. */
@@ -368,6 +396,11 @@ void t_app_fn(void *)
         input_event_t ev;
         if (xQueueReceive(q_buttons, &ev, portMAX_DELAY) != pdTRUE) continue;
 
+        /* Soft-sleep: t_touch stops queueing events, but a few may sit in
+         * q_buttons at the moment of sleep entry — drop them so the OS
+         * doesn't get a phantom release after the device "went to sleep". */
+        if (g_sleeping.load()) continue;
+
         uint32_t v = dd_ble_cfg_config_version();
         if (v != applied_cfg_version) {
             dd_ble_cfg_get_config(&cfg);
@@ -438,11 +471,14 @@ void t_ble_hid_fn(void *)
         g_fsm_state.store(APP_STATE_ACTIVE);
 
         hid_mouse_report_t merged;
-        if (xQueueReceive(q_hid, &merged, pdMS_TO_TICKS(15)) != pdTRUE) {
-            /* No report in the last 15 ms (~67 Hz pacing). This aligns with
-             * the typical 15 ms Windows BLE HID connection interval so each
-             * notify() maps to at most one connection event, preventing the
-             * NimBLE TX queue from filling up and destabilising the link. */
+        if (xQueueReceive(q_hid, &merged, pdMS_TO_TICKS(10)) != pdTRUE) {
+            /* No report in the last 10 ms (~100 Hz pacing). On Linux BlueZ
+             * the negotiated HID conn interval is typically 7.5–11.25 ms, so
+             * we want to be ready to fill every event slot. Windows used to
+             * negotiate ~15 ms and earlier code paced at 15 ms to match,
+             * but NimBLE silently drops notifies when the TX queue is full
+             * and `queue_put_drop_oldest` upstream prevents back-pressure
+             * stalls, so over-pumping at 10 ms is safe on either host. */
             continue;
         }
 
@@ -464,16 +500,30 @@ void t_ble_hid_fn(void *)
 }
 
 /* ── t_cfg — companion-app telemetry pump + command handler ────────────── *
- * Best-effort, low priority. Publishes a telemetry frame ~15 Hz from the
+ * Best-effort, low priority. Publishes a telemetry frame ~5 Hz from the
  * latest IMU/touch snapshots, and services config commands (save / reset /
  * calibrate) written by the companion app. The calibrate path is a Phase-stub
- * that reports progress; the real gyro-bias routine lands with E12. */
+ * that reports progress; the real gyro-bias routine lands with E12.
+ *
+ * Rate rationale: telemetry is shown to a human in the companion UI; 5 Hz is
+ * smooth enough for live sensor read-outs and leaves BLE connection-event
+ * slots free for the HID input-report path. dd_ble_cfg additionally
+ * short-circuits the notify when no host has the telemetry CCC enabled, so
+ * with the companion closed this task is effectively a no-op on the air.   */
 void t_cfg_fn(void *)
 {
-    TickType_t       last   = xTaskGetTickCount();
-    const TickType_t period = pdMS_TO_TICKS(66);   /* ~15 Hz */
+    TickType_t last = xTaskGetTickCount();
 
     for (;;) {
+        /* Read the rate at the top of each iteration so a rate-change
+         * command takes effect immediately on the next tick instead of
+         * the iteration after. Clamp at 15 ms (≈66 Hz) — Linux BlueZ
+         * negotiates HID conn intervals around 7.5-11.25 ms so this lets
+         * a telemetry notify ride every couple of conn events without
+         * contending with the HID input report path. */
+        TickType_t period = pdMS_TO_TICKS(g_telemetry_period_ms.load());
+        if (period < pdMS_TO_TICKS(15)) period = pdMS_TO_TICKS(15);
+
         dd_ble_cfg_telemetry_t t = {};
         for (int i = 0; i < 3; ++i) {
             t.accel_mg[i]  = g_tele_accel_mg[i].load();
@@ -481,7 +531,10 @@ void t_cfg_fn(void *)
         }
         for (int i = 0; i < 4; ++i) t.touch[i] = g_tele_touch_raw[i].load();
         t.battery_pct = 100;   /* no fuel gauge in Phase I hardware */
-        t.flags = dd_ble_hid_is_connected() ? DD_BLE_CFG_TFLAG_HID_CONNECTED : 0;
+        uint8_t flags = 0;
+        if (dd_ble_hid_is_connected()) flags |= DD_BLE_CFG_TFLAG_HID_CONNECTED;
+        if (g_sleeping.load())         flags |= DD_BLE_CFG_TFLAG_SLEEPING;
+        t.flags = flags;
         dd_ble_cfg_publish_telemetry(&t);
 
         uint8_t op = dd_ble_cfg_take_command();
@@ -509,6 +562,43 @@ void t_cfg_fn(void *)
                     vTaskDelay(pdMS_TO_TICKS(300));
                 }
                 dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                break;
+            case DD_BLE_CFG_CMD_SLEEP: {
+                /* Order matters: flip the flag first so the worker tasks stop
+                 * touching the I2C bus (their next iteration sees g_sleeping
+                 * and short-circuits). Only then power the MPU down — otherwise
+                 * t_imu_sample could race a read against the SLEEP write. */
+                g_sleeping.store(true);
+                vTaskDelay(pdMS_TO_TICKS(15));   /* let t_imu_sample finish its iter */
+                ag_result_t rc = dd_mpu6050_set_sleep(true);
+                if (rc != AG_OK) printf("[cfg] mpu sleep rc=%d\n", rc);
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                printf("[cfg] entered soft-sleep\n");
+                break;
+            }
+            case DD_BLE_CFG_CMD_WAKE: {
+                ag_result_t rc = dd_mpu6050_set_sleep(false);
+                if (rc != AG_OK) printf("[cfg] mpu wake rc=%d\n", rc);
+                vTaskDelay(pdMS_TO_TICKS(35));   /* MPU specs ~30 ms to settle */
+                g_sleeping.store(false);
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                printf("[cfg] woke from soft-sleep\n");
+                break;
+            }
+            case DD_BLE_CFG_CMD_TELE_IDLE:
+                g_telemetry_period_ms.store(250);
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                printf("[cfg] telemetry rate -> 4 Hz\n");
+                break;
+            case DD_BLE_CFG_CMD_TELE_NORMAL:
+                g_telemetry_period_ms.store(66);
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                printf("[cfg] telemetry rate -> 15 Hz\n");
+                break;
+            case DD_BLE_CFG_CMD_TELE_FAST:
+                g_telemetry_period_ms.store(50);
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                printf("[cfg] telemetry rate -> 20 Hz\n");
                 break;
             default:
                 break;

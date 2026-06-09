@@ -33,6 +33,8 @@ QueueHandle_t q_hid         = nullptr;
 std::atomic<uint8_t> g_current_buttons{0};
 std::atomic<int>     g_fsm_state{APP_STATE_INIT};
 std::atomic<bool>    g_scroll_mode{false};
+std::atomic<bool>    g_sleeping{false};
+std::atomic<uint16_t> g_telemetry_period_ms{50};   /* 20 Hz default */
 
 /* ── Telemetry snapshot (definitions; declared in tasks.h) ─────────────── */
 std::atomic<int16_t>  g_tele_accel_mg[3]  = {};
@@ -80,20 +82,41 @@ static const char *state_name(int s)
     }
 }
 
-/* 1 Hz printf of each task's stack high-water-mark (in words) plus the
- * current top-level FSM state. Referenced in the E09 acceptance criterion
- * "no task high-water exceeds 75 % of allocated after 10-minute stress". */
+/* Heartbeat: single-line liveness + lazy stack alarm. One [heartbeat] line
+ * every tick (5 s) shows FSM + BLE state at a glance. The per-task stack
+ * high-water-marks were previously logged unconditionally (8 lines / tick),
+ * which drowned out everything else; now we only spell them out when at
+ * least one task drops below 200 words free — the case the E09 acceptance
+ * criterion actually cares about. At healthy steady state this stays at
+ * one line per tick. */
+static constexpr unsigned kStackAlarmWords = 200;
+
 static void heartbeat_cb(TimerHandle_t /*xTimer*/)
 {
     const bool connected = dd_ble_hid_is_connected();
-    printf("[heartbeat] state=%-7s  BLE=%s\n",
-           state_name(g_fsm_state.load()),
-           connected ? "connected" : "waiting for host");
+
+    bool stack_alarm = false;
     for (auto &t : s_tasks) {
         if (t.handle != nullptr) {
-            const unsigned hwm =
-                (unsigned)uxTaskGetStackHighWaterMark(t.handle);
-            printf("[heartbeat]   %-14s stack free: %4u words\n", t.name, hwm);
+            unsigned hwm = (unsigned)uxTaskGetStackHighWaterMark(t.handle);
+            if (hwm < kStackAlarmWords) { stack_alarm = true; break; }
+        }
+    }
+
+    printf("[heartbeat] state=%-7s  BLE=%s%s\n",
+           state_name(g_fsm_state.load()),
+           connected ? "connected" : "waiting for host",
+           stack_alarm ? "  STACK LOW (details below)" : "");
+
+    if (stack_alarm) {
+        for (auto &t : s_tasks) {
+            if (t.handle != nullptr) {
+                const unsigned hwm =
+                    (unsigned)uxTaskGetStackHighWaterMark(t.handle);
+                printf("[heartbeat]   %-14s stack free: %4u words%s\n",
+                       t.name, hwm,
+                       hwm < kStackAlarmWords ? "  <-- low" : "");
+            }
         }
     }
 }
@@ -175,7 +198,7 @@ extern "C" ag_result_t app_controller_start(void)
     xTaskCreatePinnedToCore(t_fusion_fn,     "t_fusion",
                             4096, nullptr, 4, &s_tasks[1].handle, 0);
     xTaskCreatePinnedToCore(t_touch_fn,      "t_touch",
-                            2048, nullptr, 3, &s_tasks[2].handle, 0);
+                            3072, nullptr, 3, &s_tasks[2].handle, 0);
     xTaskCreatePinnedToCore(t_motion_fn,     "t_motion",
                             4096, nullptr, 3, &s_tasks[3].handle, 1);
     xTaskCreatePinnedToCore(t_app_fn,        "t_app",
@@ -193,7 +216,7 @@ extern "C" ag_result_t app_controller_start(void)
 
     /* ── 5. Heartbeat timer (1 Hz stack HWM + FSM log) ──────────────── */
     s_heartbeat_timer = xTimerCreate(
-        "heartbeat", pdMS_TO_TICKS(1000), pdTRUE, nullptr, heartbeat_cb);
+        "heartbeat", pdMS_TO_TICKS(5000), pdTRUE, nullptr, heartbeat_cb);
     if (s_heartbeat_timer != nullptr) {
         xTimerStart(s_heartbeat_timer, 0);
     }

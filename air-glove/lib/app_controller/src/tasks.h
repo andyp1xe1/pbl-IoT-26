@@ -44,6 +44,19 @@ extern std::atomic<bool> g_scroll_mode;
 enum app_state_t { APP_STATE_INIT = 0, APP_STATE_PAIRING, APP_STATE_ACTIVE };
 extern std::atomic<int> g_fsm_state;
 
+/* Soft-sleep flag. When true the device keeps its BLE link up (so the
+ * companion app still sees it) but stops emitting HID mouse reports and
+ * powers the MPU6050 down. Toggled by t_cfg in response to CMD_SLEEP /
+ * CMD_WAKE from the companion. Producers (t_imu_sample, t_touch) and
+ * sinks (t_app, t_motion) check this each iteration and short-circuit
+ * when set. Single-byte atomic is lock-free on ESP32. */
+extern std::atomic<bool> g_sleeping;
+
+/* Telemetry publish period in milliseconds. Adjusted by t_cfg in response
+ * to CMD_TELE_IDLE / NORMAL / FAST so the BLE airtime matches what the
+ * companion is actually watching. Default 100 ms (10 Hz). */
+extern std::atomic<uint16_t> g_telemetry_period_ms;
+
 /* ── Latest-sample telemetry snapshot (for the companion-app GATT service) ──
  * Writers: t_imu_sample (IMU axes), t_touch (pad raws). Reader: t_cfg.
  * Each is a single 16-bit word — lock-free on ESP32. Values are pre-scaled to

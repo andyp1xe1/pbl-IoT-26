@@ -129,3 +129,13 @@ extern "C" ag_result_t dd_mpu6050_read(imu_sample_t *out) {
 
     return AG_OK;
 }
+
+extern "C" ag_result_t dd_mpu6050_set_sleep(bool sleeping) {
+    if (!s_initialized) return AG_ERR_STATE;
+    /* PWR_MGMT_1: bit 6 = SLEEP, bits[2:0] = CLKSEL (0 = internal 8 MHz osc,
+     * matching dd_mpu6050_init()). Datasheet §4.28: sensor outputs freeze and
+     * the chip drops to typ. 5 µA while SLEEP=1. Clearing SLEEP resumes
+     * sampling within ~30 ms; DLPF/FS_SEL/AFS_SEL persist. */
+    const uint8_t val = sleeping ? 0x40 : 0x00;
+    return write_reg(REG_PWR_MGMT_1, val);
+}

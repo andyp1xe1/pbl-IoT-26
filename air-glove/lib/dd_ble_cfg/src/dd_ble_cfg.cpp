@@ -41,8 +41,8 @@ const dd_ble_cfg_t kBuiltinDefaults = {
     /* sens_y_milli        */ 1000,
     /* deadzone_mrad       */ 4,
     /* madgwick_beta_milli */ 50,    /* matches existing srv_fusion_init(0.05f) */
-    /* debounce_ms         */ 30,
-    /* touch_threshold[]   */ {600, 600, 600, 600},
+    /* debounce_ms         */ 15,    /* 2 sample ticks @10ms — catches bench wire taps */
+    /* touch_threshold[]   */ {20, 20, 20, 20},   /* empirical safe cap-pad fire point */
     /* click_action[]      */ {
         AG_CLICK_NONE,         /* THUMB  — unused by default                       */
         AG_CLICK_LEFT,         /* INDEX  — left click                              */
@@ -53,12 +53,15 @@ const dd_ble_cfg_t kBuiltinDefaults = {
     /* click_action_alt[]  */ {AG_CLICK_NONE, AG_CLICK_NONE, AG_CLICK_NONE},
 };
 
-static dd_ble_cfg_t   s_cfg          = kBuiltinDefaults;
-static volatile uint32_t s_version   = 1;
-static volatile uint8_t  s_pending    = DD_BLE_CFG_CMD_NONE;
-static uint8_t        s_seq          = 0;
-static bool           s_inited       = false;
-static portMUX_TYPE   s_mux          = portMUX_INITIALIZER_UNLOCKED;
+static dd_ble_cfg_t   s_cfg              = kBuiltinDefaults;
+static volatile uint32_t s_version       = 1;
+static volatile uint8_t  s_pending       = DD_BLE_CFG_CMD_NONE;
+static uint8_t        s_seq              = 0;
+static bool           s_inited           = false;
+/* Set/cleared from the NimBLE host task via the telemetry CCC callback.
+ * Single-byte volatile is atomic on ESP32 (Xtensa); no portMUX needed. */
+static volatile bool  s_tele_subscribed  = false;
+static portMUX_TYPE   s_mux              = portMUX_INITIALIZER_UNLOCKED;
 
 static NimBLECharacteristic *s_config = nullptr;
 static NimBLECharacteristic *s_tele   = nullptr;
@@ -169,8 +172,24 @@ public:
     }
 };
 
-static ConfigCallbacks  s_config_cb;
-static CommandCallbacks s_command_cb;
+/* Telemetry CCC tracker. Telemetry is heavy (24 bytes @ several Hz) and is
+ * only useful when the companion app is open. Without this gate we spend BLE
+ * connection-event slots on notifications nobody reads, starving the HID
+ * input-report path and dragging cursor responsiveness on the host side. */
+class TelemetrySubCallbacks : public NimBLECharacteristicCallbacks {
+public:
+    void onSubscribe(NimBLECharacteristic * /*pChar*/,
+                     ble_gap_conn_desc   * /*desc*/,
+                     uint16_t             subValue) override {
+        const bool on = (subValue & 0x0001) != 0;
+        s_tele_subscribed = on;
+        printf("[dd_ble_cfg] telemetry %s\n", on ? "subscribed" : "unsubscribed");
+    }
+};
+
+static ConfigCallbacks        s_config_cb;
+static CommandCallbacks       s_command_cb;
+static TelemetrySubCallbacks  s_tele_cb;
 
 } /* namespace */
 
@@ -223,6 +242,7 @@ extern "C" ag_result_t dd_ble_cfg_init(const dd_ble_cfg_t *defaults) {
 
     s_config->setCallbacks(&s_config_cb);
     s_cmd->setCallbacks(&s_command_cb);
+    s_tele->setCallbacks(&s_tele_cb);
 
     seed_config_characteristic();
 
@@ -249,6 +269,11 @@ extern "C" uint32_t dd_ble_cfg_config_version(void) {
 
 extern "C" void dd_ble_cfg_publish_telemetry(const dd_ble_cfg_telemetry_t *t) {
     if (t == nullptr || s_tele == nullptr) return;
+    /* No companion app listening → skip the encode + notify entirely. The
+     * NimBLE notify() would silently drop with no subscribers, but it still
+     * costs time on the host task. Pre-flighting it here keeps BLE airtime
+     * free for the HID input-report path. */
+    if (!s_tele_subscribed) return;
 
     uint8_t buf[kTelemetrySize];
     buf[0] = 1;            /* version */
