@@ -256,7 +256,65 @@ Roughly 1/4 the size of the original Plan 10 draft — because `feat/web-app` al
 
 ---
 
-## 11.8 — Plan 09 follow-up (not part of this plan, but blocks it)
+## 11.8 — BLE bringup constraints (NimBLE 1.x)
+
+Discovered during HIL bringup; these are hard requirements, not stylistic
+choices.
+
+### Two-phase init order
+
+NimBLE-Arduino 1.x finalises the underlying att (attribute) table the first
+time `NimBLEHIDDevice::startServices()` runs. Any service registered
+*after* that point lives in the NimBLE-Arduino object tree but its
+characteristics never make it into the att DB — BlueZ discovers the
+service shell with zero characteristics and Web Bluetooth fails on
+`getCharacteristic`. `dd_ble_hid` therefore exposes:
+
+```c
+ag_result_t dd_ble_hid_init_server(const char *device_name);  /* phase 1 */
+ag_result_t dd_ble_hid_start(void);                           /* phase 2 */
+```
+
+`app_controller_start` calls them in this strict order:
+
+```
+dd_ble_hid_init_server("AirGlove")   → server up, HID objects ready, no att
+dd_ble_cfg_init(nullptr)             → custom service + chars registered
+dd_ble_hid_start()                   → att finalised, advertising begins
+```
+
+Anything that adds a service must do so between 3a and 3c. The original
+one-shot `dd_ble_hid_init()` is preserved as a convenience wrapper for
+single-service setups.
+
+### Just-works bonding (LE Secure Connections)
+
+`dd_ble_hid` calls `setSecurityAuth(true, false, true)` (bonding, no MITM,
+SC). Required because Linux BlueZ enforces encryption on HID-over-GATT
+per spec and drops unauthenticated links within ~50 ms; Windows is
+lenient and tolerates open HID, which is why earlier MVP builds with
+`auth=false` worked on Windows but not on Linux. NimBLE-Arduino persists
+bond keys in NVS (`nimble_bond` namespace), so pairing survives reboots
+provided flash isn't erased with `pio -t erase`.
+
+### Operational note
+
+A reflash that wipes the ESP32 bond table (e.g. `-t erase`) leaves the
+host's stored bond key stale. BlueZ silently drops reconnects in that
+state. Recovery is host-side:
+
+```bash
+bluetoothctl remove <MAC>
+sudo find /var/lib/bluetooth -iname '<mac:lower>' -exec rm -rf {} +
+sudo systemctl restart bluetooth
+```
+
+then re-pair via `bluetoothctl pair`. Prefer `pio -t upload` (no erase)
+for normal dev iteration.
+
+---
+
+## 11.9 — Plan 09 follow-up (not part of this plan, but blocks it)
 
 Once `feat/web-app` rebases on `f50cc64` (90° rotation commit), re-run the HIL bring-up checklist §8 with attention to:
 

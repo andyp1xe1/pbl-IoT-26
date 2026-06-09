@@ -202,6 +202,11 @@ extern "C" ag_result_t dd_ble_cfg_init(const dd_ble_cfg_t *defaults) {
         return AG_ERR_STATE;
     }
 
+    /* Caller (app_controller) must invoke this between dd_ble_hid_init_server()
+     * and dd_ble_hid_start(). Registering after dd_ble_hid_start() puts our
+     * service in the NimBLE-Arduino object tree but NOT in the underlying att
+     * table — BlueZ then discovers the service shell with zero characteristics
+     * and Web Bluetooth fails at getCharacteristic. */
     NimBLEService *svc = server->createService(kSvcUuid);
     if (svc == nullptr) return AG_ERR_INIT;
 
@@ -227,7 +232,7 @@ extern "C" ag_result_t dd_ble_cfg_init(const dd_ble_cfg_t *defaults) {
     svc->start();
 
     s_inited = true;
-    printf("[dd_ble_cfg] config service up\n");
+    printf("[dd_ble_cfg] config service registered\n");
     return AG_OK;
 }
 

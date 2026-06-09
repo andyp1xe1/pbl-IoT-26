@@ -123,18 +123,27 @@ extern "C" ag_result_t app_controller_start(void)
     rc = dd_touch_init();
     if (rc != AG_OK) fatal_init("dd_touch_init", rc);
 
-    printf("[app_controller] init stage 3: dd_ble_hid\n");
-    rc = dd_ble_hid_init("AirGlove");
-    if (rc != AG_OK) fatal_init("dd_ble_hid_init", rc);
+    /* BLE two-phase init: bring up the server and register every service
+     * BEFORE the att table is finalised. Adding a service after
+     * dd_ble_hid_start() leaves its characteristics out of the att table
+     * on NimBLE-Arduino 1.x — BlueZ discovers the service with zero chars
+     * and Web Bluetooth fails at getCharacteristic. */
+    printf("[app_controller] init stage 3a: dd_ble_hid (server)\n");
+    rc = dd_ble_hid_init_server("AirGlove");
+    if (rc != AG_OK) fatal_init("dd_ble_hid_init_server", rc);
 
     /* Companion-app config/telemetry service shares the NimBLE server created
      * above. Non-fatal: if it fails the glove still works as a plain mouse. */
-    printf("[app_controller] init stage 4: dd_ble_cfg\n");
+    printf("[app_controller] init stage 3b: dd_ble_cfg\n");
     rc = dd_ble_cfg_init(nullptr);
     if (rc != AG_OK) {
         printf("[app_controller] WARN dd_ble_cfg_init rc=%d — continuing without "
                "companion service\n", rc);
     }
+
+    printf("[app_controller] init stage 3c: dd_ble_hid (start + advertise)\n");
+    rc = dd_ble_hid_start();
+    if (rc != AG_OK) fatal_init("dd_ble_hid_start", rc);
 
     /* ── 2. Services (cannot fail on valid inputs) ──────────────────── */
     printf("[app_controller] init services\n");

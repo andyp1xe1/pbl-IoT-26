@@ -100,19 +100,24 @@ static InputReportCallbacks s_input_cb;
 
 } /* namespace */
 
-extern "C" ag_result_t dd_ble_hid_init(const char *device_name) {
+extern "C" ag_result_t dd_ble_hid_init_server(const char *device_name) {
     if (s_initialized) return AG_OK;
 
     const char *name = (device_name && device_name[0]) ? device_name : "AirGlove";
 
     NimBLEDevice::init(name);
 
-    /* No bonding for MVP — bonding requires the host to cache keys that the
-     * ESP32 does not persist across reboots. On Windows this causes an
-     * immediate disconnect on every reconnect because Windows presents the
-     * old keys and the ESP32 has none. Open (unauthenticated, no bonding)
-     * is stable and perfectly fine for a mouse. */
-    NimBLEDevice::setSecurityAuth(false, false, false);
+    /* Just-works bonding + LE Secure Connections. Required for HID-over-GATT:
+     * Linux BlueZ enforces encryption on the HID profile per spec and tears
+     * the link down within ~50 ms if the peer can't satisfy it. Windows is
+     * more lenient and tolerates open HID, which is why earlier MVP builds
+     * with auth=false worked there. NimBLE-Arduino persists bond keys in NVS
+     * (namespace "nimble_bond") so pairing survives reboots; if the device
+     * is reflashed with `-t erase`, the host's stored bond must also be
+     * forgotten or BlueZ will silently drop reconnects. */
+    NimBLEDevice::setSecurityAuth(/*bonding=*/true,
+                                  /*mitm=*/false,
+                                  /*sc=*/true);
     NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
     s_server = NimBLEDevice::createServer();
@@ -155,6 +160,18 @@ extern "C" ag_result_t dd_ble_hid_init(const char *device_name) {
      * the host writes the CCC descriptor (notifications enabled). */
     s_input->setCallbacks(&s_input_cb);
 
+    /* DELIBERATELY no startServices() and no advertising here — leave room
+     * for other drivers to register services on the same server. The att
+     * table is finalised by dd_ble_hid_start(). */
+    printf("[dd_ble_hid] server ready — register extra services before "
+           "dd_ble_hid_start()\n");
+    return AG_OK;
+}
+
+extern "C" ag_result_t dd_ble_hid_start(void) {
+    if (s_initialized)        return AG_OK;
+    if (s_hid == nullptr)     return AG_ERR_STATE;
+
     s_hid->startServices();
 
     NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
@@ -164,8 +181,14 @@ extern "C" ag_result_t dd_ble_hid_init(const char *device_name) {
     adv->start();
 
     s_initialized = true;
-    printf("[dd_ble_hid] advertising: %s\n", name);
+    printf("[dd_ble_hid] advertising: AirGlove\n");
     return AG_OK;
+}
+
+extern "C" ag_result_t dd_ble_hid_init(const char *device_name) {
+    ag_result_t rc = dd_ble_hid_init_server(device_name);
+    if (rc != AG_OK) return rc;
+    return dd_ble_hid_start();
 }
 
 extern "C" ag_result_t dd_ble_hid_send(const hid_mouse_report_t *r) {

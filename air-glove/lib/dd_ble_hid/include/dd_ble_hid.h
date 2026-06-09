@@ -7,9 +7,24 @@
 extern "C" {
 #endif
 
-/* Initialise BLE stack, register HID mouse service, start advertising.
- * `device_name` is advertised as the local name (typically "AirGlove"). */
+/* One-shot init: BLE stack up, HID service registered, advertising started.
+ * Use this only if nothing else needs to register on the same NimBLE server.
+ * For multi-service setups (e.g. with dd_ble_cfg) use the two-phase pair
+ * dd_ble_hid_init_server() + dd_ble_hid_start() below — otherwise the
+ * other service's characteristics never reach the att table on NimBLE 1.x. */
 ag_result_t dd_ble_hid_init(const char *device_name);
+
+/* Phase 1: bring up the BLE stack, create the server, register the HID
+ * service objects, but do NOT start any service and do NOT advertise.
+ * After this call, NimBLEDevice::getServer() is valid and other drivers
+ * may register their own services on it (createService + createCharacteristic
+ * + start). */
+ag_result_t dd_ble_hid_init_server(const char *device_name);
+
+/* Phase 2: finalise the HID services (att table) and start advertising.
+ * Must be called exactly once, after every other service has been
+ * registered. Safe to call only after dd_ble_hid_init_server(). */
+ag_result_t dd_ble_hid_start(void);
 
 /* Send one mouse report. Non-blocking; returns AG_ERR_STATE when not
  * connected, AG_OK on notify enqueued. May be called at up to 125 Hz. */
