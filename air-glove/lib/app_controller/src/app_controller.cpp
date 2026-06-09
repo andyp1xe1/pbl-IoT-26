@@ -60,16 +60,16 @@ static TaskEntry s_tasks[7] = {
 
 static TimerHandle_t s_heartbeat_timer = nullptr;
 
+/* Boot-time motion mapping: equivalent to the dd_ble_cfg built-in defaults
+ * (pitch+yaw → dx, roll → dy with 1.7× boost), so cursor behaviour at the
+ * "Air Glove just powered on" instant matches what the companion will read
+ * back from NVS once t_motion picks up the persisted config. */
 static const motion_config_t kDefaultMotionCfg = {
-    /* deadzone_rad */ 0.004f,  /* ~0.23° — filters gyro noise (~0.002 rad)
-                                 *  without blocking slow intentional tilts.  */
-    /* gain_low     */ 600.0f,  /* linear term — gives ~25 px/frame at 30°/s  */
-    /* gain_exp     */ 1.2f,    /* mild curve: fast flicks feel snappy         */
-    /* velocity_cap */ 127.0f,  /* full int8 range                             */
-    /* gain_y_scale */ 1.7f,    /* wrist roll (up/down) produces smaller deltas
-                                 *  than pitch (left/right) for the same hand
-                                 *  displacement — this levels them out.
-                                 *  Tune up if Y is still slow, down if too fast. */
+    /* mix_x_milli  */ { 0, 0, 0, 0, 0, 0,    0, +1000, -1000 },
+    /* mix_y_milli  */ { 0, 0, 0, 0, 0, 0, -1700,     0,     0 },
+    /* sens_x_milli */ 1000,
+    /* sens_y_milli */ 1000,
+    /* deadzone_rad */ 0.004f,
 };
 
 static const char *state_name(int s)

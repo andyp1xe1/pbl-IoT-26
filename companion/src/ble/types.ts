@@ -31,7 +31,40 @@ export const NO_MODIFIER = 0xff;
 
 export const PAD_NAMES: readonly string[] = ["Thumb", "Index", "Middle", "Ring"];
 
-/** Wire format v2 — see docs/plans/11-companion-app-firmware-extensions.md §11.2. */
+/** Motion-mix input axes. Order is wire-stable — extending requires a
+ *  config schema bump. Six raw IMU axes plus three Madgwick-fused rates
+ *  (zero when the toggle is off). Matches AG_MIX_* in ag_types.h. */
+export enum MixAxis {
+  Gx = 0,
+  Gy = 1,
+  Gz = 2,
+  Ax = 3,
+  Ay = 4,
+  Az = 5,
+  Roll = 6,
+  Pitch = 7,
+  Yaw = 8,
+}
+export const MIX_AXIS_COUNT = 9;
+
+export const MIX_AXIS_LABELS: Record<MixAxis, string> = {
+  [MixAxis.Gx]: "Gyro X",
+  [MixAxis.Gy]: "Gyro Y",
+  [MixAxis.Gz]: "Gyro Z",
+  [MixAxis.Ax]: "Accel X",
+  [MixAxis.Ay]: "Accel Y",
+  [MixAxis.Az]: "Accel Z",
+  [MixAxis.Roll]: "Roll rate (fused)",
+  [MixAxis.Pitch]: "Pitch rate (fused)",
+  [MixAxis.Yaw]: "Yaw rate (fused)",
+};
+
+/** Nine signed weights, one per AG_MIX_* axis. */
+export type MixVector = [
+  number, number, number, number, number, number, number, number, number,
+];
+
+/** Wire format v3 — see docs/plans/11-companion-app-firmware-extensions.md §11.2. */
 export interface AgConfig {
   version: number;
   flags: number;
@@ -44,6 +77,11 @@ export interface AgConfig {
   clickAction: [ClickAction, ClickAction, ClickAction, ClickAction];
   modifierPad: number; // 0..3 or NO_MODIFIER
   clickActionAlt: [ClickAction, ClickAction, ClickAction];
+  madgwickEnabled: boolean;
+  /** Signed milli-weight (±2000 → ±2.0×) per axis into cursor X. */
+  mixX: MixVector;
+  /** Signed milli-weight per axis into cursor Y. */
+  mixY: MixVector;
 }
 
 export interface AgTelemetry {
@@ -142,18 +180,18 @@ export interface IAirGloveClient {
   onStatus(cb: (s: AgStatus) => void): void;
 }
 
-export const CONFIG_VERSION_V2 = 2;
+export const CONFIG_VERSION_V3 = 3;
 
 export function defaultConfig(): AgConfig {
   return {
-    version: CONFIG_VERSION_V2,
+    version: CONFIG_VERSION_V3,
     flags: 0,
     sensXMilli: 1000,
     sensYMilli: 1000,
     deadzoneMrad: 4,
     madgwickBetaMilli: 50,
-    debounceMs: 30,
-    touchThreshold: [600, 600, 600, 600],
+    debounceMs: 15,
+    touchThreshold: [20, 20, 20, 20],
     clickAction: [
       ClickAction.None,
       ClickAction.Left,
@@ -162,5 +200,10 @@ export function defaultConfig(): AgConfig {
     ],
     modifierPad: NO_MODIFIER,
     clickActionAlt: [ClickAction.None, ClickAction.None, ClickAction.None],
+    madgwickEnabled: true,
+    /* Defaults reproduce the pre-mix-matrix behaviour: pitch+yaw → cursor X
+     * with yaw inverted, roll → cursor Y with the historic 1.7× boost. */
+    mixX: [0, 0, 0, 0, 0, 0, 0, +1000, -1000],
+    mixY: [0, 0, 0, 0, 0, 0, -1700, 0, 0],
   };
 }

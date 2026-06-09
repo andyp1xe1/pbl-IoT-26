@@ -52,20 +52,19 @@ static inline int16_t sat_i16(float v)
     return (int16_t)v;
 }
 
-/* Translate the companion-app config into srv_motion tuning. At the default
- * config (sens 1.00×, deadzone 4 mrad) this reproduces kDefaultMotionCfg, so
- * the carefully-tuned out-of-box feel is unchanged. X speed tracks sens_x,
- * Y speed tracks sens_y independently. */
+/* Translate the companion-app config into srv_motion tuning. The mix matrix
+ * + sens + deadzone are passed straight through; gain curve / velocity cap
+ * / EMA stay internal to srv_motion. */
 static motion_config_t motion_from_cfg(const dd_ble_cfg_t *c)
 {
-    const float sx = (float)c->sens_x_milli / 1000.0f;
-    const float sy = (float)c->sens_y_milli / 1000.0f;
-    motion_config_t mc;
+    motion_config_t mc = {};
+    for (int i = 0; i < AG_MIX_COUNT; ++i) {
+        mc.mix_x_milli[i] = c->mix_x_milli[i];
+        mc.mix_y_milli[i] = c->mix_y_milli[i];
+    }
+    mc.sens_x_milli = c->sens_x_milli;
+    mc.sens_y_milli = c->sens_y_milli;
     mc.deadzone_rad = (float)c->deadzone_mrad / 1000.0f;
-    mc.gain_low     = 600.0f * sx;
-    mc.gain_exp     = 1.2f;
-    mc.velocity_cap = 127.0f;
-    mc.gain_y_scale = (sx > 0.0f) ? 1.7f * (sy / sx) : 1.7f;
     return mc;
 }
 
@@ -295,16 +294,18 @@ void t_touch_fn(void *)
 /* ── t_motion — q_orientation → dx/dy → q_hid ─────────────────────────── */
 void t_motion_fn(void *)
 {
-    uint64_t last_t_us   = 0;
     int16_t  scroll_accum = 0;   /* sub-notch accumulator for scroll mode */
 
     /* One HID wheel "notch" is emitted every kScrollThreshold dy-units
      * accumulated. Lower = faster scroll. Tune between 60 (fast) and 200
-     * (slow). At current gain settings a moderate upward tilt produces
-     * ~15 dy/frame, so threshold=100 → ~1 notch every 7 frames ≈ 14 Hz. */
+     * (slow). */
     static constexpr int16_t kScrollThreshold = 100;
+    static constexpr float kDegToRad = 0.017453292519943f;
 
     uint32_t applied_cfg_version = 0;   /* 0 ≠ initial s_version (1) → applies once at start */
+    bool     madgwick_on        = true;
+    bool     has_prev_q         = false;
+    quat_t   prev_q             = { 1.0f, 0.0f, 0.0f, 0.0f };
 
     for (;;) {
         oriented_frame_t f;
@@ -323,20 +324,40 @@ void t_motion_fn(void *)
             dd_ble_cfg_get_config(&c);
             motion_config_t mc = motion_from_cfg(&c);
             srv_motion_init(&mc);
+            madgwick_on = (c.madgwick_enabled != 0);
             applied_cfg_version = cfg_version;
-            printf("[motion] applied config v%u: gain_low=%.0f y_scale=%.2f dz=%.4f\n",
-                   (unsigned)cfg_version, (double)mc.gain_low,
-                   (double)mc.gain_y_scale, (double)mc.deadzone_rad);
+            printf("[motion] applied config v%u: madgwick=%u sens=[%u,%u] dz=%.4f\n",
+                   (unsigned)cfg_version, (unsigned)madgwick_on,
+                   c.sens_x_milli, c.sens_y_milli, (double)mc.deadzone_rad);
         }
 
-        float dt_s = 0.01f;
-        if (last_t_us != 0 && f.t_us > last_t_us) {
-            dt_s = (float)(f.t_us - last_t_us) * 1e-6f;
+        /* Build the 9-axis signal vector: raw IMU read straight from the
+         * atomic snapshots t_imu_sample publishes, fused rates derived from
+         * the per-frame quaternion delta (gated on madgwick_on). */
+        float signals[AG_MIX_COUNT];
+        signals[AG_MIX_GX] = (float)g_tele_gyro_mdps[0].load() * 1e-3f * kDegToRad;
+        signals[AG_MIX_GY] = (float)g_tele_gyro_mdps[1].load() * 1e-3f * kDegToRad;
+        signals[AG_MIX_GZ] = (float)g_tele_gyro_mdps[2].load() * 1e-3f * kDegToRad;
+        signals[AG_MIX_AX] = (float)g_tele_accel_mg[0].load()  * 1e-3f * 9.80665f;
+        signals[AG_MIX_AY] = (float)g_tele_accel_mg[1].load()  * 1e-3f * 9.80665f;
+        signals[AG_MIX_AZ] = (float)g_tele_accel_mg[2].load()  * 1e-3f * 9.80665f;
+
+        if (madgwick_on && has_prev_q) {
+            /* q_delta = prev_q^-1 ⊗ f.q. Unit quat inverse = conjugate.
+             * 2 · vector(q_delta) ≈ rotation-vector in body frame, per frame. */
+            const float p0 =  prev_q.q0, p1 = -prev_q.q1, p2 = -prev_q.q2, p3 = -prev_q.q3;
+            const float c0 = f.q.q0,    c1 = f.q.q1,    c2 = f.q.q2,    c3 = f.q.q3;
+            signals[AG_MIX_ROLL]  = 2.0f * (p0*c1 + p1*c0 + p2*c3 - p3*c2);
+            signals[AG_MIX_PITCH] = 2.0f * (p0*c2 - p1*c3 + p2*c0 + p3*c1);
+            signals[AG_MIX_YAW]   = 2.0f * (p0*c3 + p1*c2 - p2*c1 + p3*c0);
+        } else {
+            signals[AG_MIX_ROLL] = signals[AG_MIX_PITCH] = signals[AG_MIX_YAW] = 0.0f;
         }
-        last_t_us = f.t_us;
+        prev_q     = f.q;
+        has_prev_q = true;
 
         int8_t dx = 0, dy = 0;
-        if (srv_motion_update(&f.q, dt_s, &dx, &dy) != AG_OK) continue;
+        if (srv_motion_update(signals, &dx, &dy) != AG_OK) continue;
 
         if (g_scroll_mode.load()) {
             /* ── Scroll mode: dy drives the wheel, cursor stays frozen ── *

@@ -1,267 +1,169 @@
-/* test_srv_motion — native Unity tests for the quaternion → cursor service.
+/* test_srv_motion — native Unity tests for the mix-matrix cursor mapping.
  *
  * Run with:  pio test -e native -f test_srv_motion
  *
- * All inputs are synthesised quaternions — no hardware needed.
+ * Verifies the linear-mix pipeline: signal vector in, dx/dy out, with
+ * sensitivity, radial deadzone, gain curve, and clutch. No hardware needed.
  */
 
 #include <unity.h>
 #include <math.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "srv_motion.h"
 
-/* ── Helpers ──────────────────────────────────────────────────────────── */
-
-static const quat_t IDENTITY = { 1.0f, 0.0f, 0.0f, 0.0f };
-
-/* Unit quaternion representing rotation of `theta` radians around X (roll). */
-static quat_t quat_x(float theta)
+static motion_config_t default_cfg(void)
 {
-    const float h = theta * 0.5f;
-    quat_t q = { cosf(h), sinf(h), 0.0f, 0.0f };
-    return q;
-}
-
-/* Unit quaternion for rotation of `theta` radians around Y (pitch). */
-static quat_t quat_y(float theta)
-{
-    const float h = theta * 0.5f;
-    quat_t q = { cosf(h), 0.0f, sinf(h), 0.0f };
-    return q;
-}
-
-/* Unit quaternion for rotation of `theta` radians around Z (yaw). */
-static quat_t quat_z(float theta)
-{
-    const float h = theta * 0.5f;
-    quat_t q = { cosf(h), 0.0f, 0.0f, sinf(h) };
-    return q;
-}
-
-static motion_config_t cfg_default(void)
-{
-    motion_config_t c;
-    c.deadzone_rad = 0.02f;
-    c.gain_low     = 400.0f;
-    c.gain_exp     = 1.6f;
-    c.velocity_cap = 127.0f;
-    c.gain_y_scale = 1.0f;
+    motion_config_t c = {};
+    /* Default: pitch+yaw → dx (with yaw negated), roll → dy.
+     * Matches firmware defaults so tests reflect production behaviour. */
+    c.mix_x_milli[AG_MIX_PITCH] = +1000;
+    c.mix_x_milli[AG_MIX_YAW]   = -1000;
+    c.mix_y_milli[AG_MIX_ROLL]  = -1700;
+    c.sens_x_milli = 1000;
+    c.sens_y_milli = 1000;
+    c.deadzone_rad = 0.004f;
     return c;
 }
 
-static void prime_with_identity(void)
+static void zero_signals(float s[AG_MIX_COUNT])
 {
-    int8_t dx, dy;
-    srv_motion_update(&IDENTITY, 0.01f, &dx, &dy);   /* first call caches */
+    memset(s, 0, sizeof(float) * AG_MIX_COUNT);
 }
 
-/* ── Fixture ──────────────────────────────────────────────────────────── */
-
-void setUp(void)
-{
-    motion_config_t c = cfg_default();
-    srv_motion_init(&c);
-}
-
+void setUp(void)    { motion_config_t c = default_cfg(); srv_motion_init(&c); }
 void tearDown(void) {}
 
-/* ── Tests ────────────────────────────────────────────────────────────── */
-
-/* 1. Init rejects NULL. */
-static void test_init_rejects_null(void)
-{
-    TEST_ASSERT_EQUAL_INT(AG_ERR_ARG, srv_motion_init(nullptr));
-}
-
-/* 2. Init rejects out-of-range fields. */
-static void test_init_rejects_bad_config(void)
-{
-    motion_config_t c;
-
-    c = cfg_default(); c.deadzone_rad = -0.01f;
-    TEST_ASSERT_EQUAL_INT(AG_ERR_ARG, srv_motion_init(&c));
-
-    c = cfg_default(); c.gain_low = 0.0f;
-    TEST_ASSERT_EQUAL_INT(AG_ERR_ARG, srv_motion_init(&c));
-
-    c = cfg_default(); c.gain_exp = 0.5f;           /* must be >= 1.0 */
-    TEST_ASSERT_EQUAL_INT(AG_ERR_ARG, srv_motion_init(&c));
-
-    c = cfg_default(); c.velocity_cap = 0.0f;
-    TEST_ASSERT_EQUAL_INT(AG_ERR_ARG, srv_motion_init(&c));
-}
-
-/* 3. First call after init always returns zero regardless of input. */
-static void test_first_call_returns_zero(void)
-{
-    int8_t dx = 99, dy = 99;
-    quat_t q = quat_y(0.3f);
-    TEST_ASSERT_EQUAL_INT(AG_OK, srv_motion_update(&q, 0.01f, &dx, &dy));
-    TEST_ASSERT_EQUAL_INT(0, (int)dx);
-    TEST_ASSERT_EQUAL_INT(0, (int)dy);
-}
-
-/* 4. Feeding the same quaternion twice yields zero output on the second call. */
-static void test_identical_q_returns_zero(void)
+void test_null_args_rejected(void)
 {
     int8_t dx, dy;
-    quat_t q = quat_y(0.3f);
-    srv_motion_update(&q, 0.01f, &dx, &dy);          /* cache */
-    srv_motion_update(&q, 0.01f, &dx, &dy);          /* delta is identity */
-    TEST_ASSERT_EQUAL_INT(0, (int)dx);
-    TEST_ASSERT_EQUAL_INT(0, (int)dy);
+    TEST_ASSERT_EQUAL(AG_ERR_ARG, srv_motion_update(NULL, &dx, &dy));
+    float s[AG_MIX_COUNT] = {0};
+    TEST_ASSERT_EQUAL(AG_ERR_ARG, srv_motion_update(s, NULL, &dy));
+    TEST_ASSERT_EQUAL(AG_ERR_ARG, srv_motion_update(s, &dx, NULL));
+    TEST_ASSERT_EQUAL(AG_ERR_ARG, srv_motion_init(NULL));
 }
 
-/* 5. Angular delta below `deadzone_rad` produces zero output. */
-static void test_below_deadzone_returns_zero(void)
+void test_init_rejects_zero_sens(void)
 {
-    prime_with_identity();
+    motion_config_t c = default_cfg();
+    c.sens_x_milli = 0;
+    TEST_ASSERT_EQUAL(AG_ERR_ARG, srv_motion_init(&c));
+}
+
+void test_zero_signals_yield_zero_output(void)
+{
+    float s[AG_MIX_COUNT] = {0};
     int8_t dx, dy;
-    /* Default deadzone = 0.02 rad; pick 0.01 (well below). */
-    quat_t q = quat_y(0.01f);
-    srv_motion_update(&q, 0.01f, &dx, &dy);
-    TEST_ASSERT_EQUAL_INT(0, (int)dx);
-    TEST_ASSERT_EQUAL_INT(0, (int)dy);
+    for (int i = 0; i < 20; ++i) srv_motion_update(s, &dx, &dy);
+    TEST_ASSERT_EQUAL_INT8(0, dx);
+    TEST_ASSERT_EQUAL_INT8(0, dy);
 }
 
-/* 6. Increasing |theta| never decreases |dx|. */
-static void test_doubling_input_is_monotonic(void)
+void test_pitch_drives_dx_positive(void)
 {
-    int prev_abs = -1;
-    /* Sweep well above deadzone, stay below the velocity cap
-     * (400 * 0.3 + 0.3^1.6 ≈ 120 < 127). */
-    for (float theta = 0.03f; theta <= 0.30f; theta += 0.02f) {
-        motion_config_t c = cfg_default();
-        srv_motion_init(&c);
-        prime_with_identity();
-
-        int8_t dx, dy;
-        quat_t q = quat_y(theta);
-        srv_motion_update(&q, 0.01f, &dx, &dy);
-        const int curr = (dx < 0) ? -(int)dx : (int)dx;
-        TEST_ASSERT_TRUE_MESSAGE(curr >= prev_abs,
-                                 "|dx| decreased as |theta| increased");
-        prev_abs = curr;
-    }
+    float s[AG_MIX_COUNT];
+    zero_signals(s);
+    s[AG_MIX_PITCH] = 0.05f;
+    int8_t dx = 0, dy = 0;
+    for (int i = 0; i < 30; ++i) srv_motion_update(s, &dx, &dy);
+    TEST_ASSERT_GREATER_THAN_INT8(0, dx);
+    TEST_ASSERT_EQUAL_INT8(0, dy);
 }
 
-/* 7. Output sign follows input sign for both axes. */
-static void test_sign_preservation(void)
+void test_yaw_drives_dx_negative(void)
 {
+    float s[AG_MIX_COUNT];
+    zero_signals(s);
+    s[AG_MIX_YAW] = 0.05f;
+    int8_t dx = 0, dy = 0;
+    for (int i = 0; i < 30; ++i) srv_motion_update(s, &dx, &dy);
+    TEST_ASSERT_LESS_THAN_INT8(0, dx);
+    TEST_ASSERT_EQUAL_INT8(0, dy);
+}
+
+void test_roll_drives_dy_negative(void)
+{
+    float s[AG_MIX_COUNT];
+    zero_signals(s);
+    s[AG_MIX_ROLL] = 0.05f;
+    int8_t dx = 0, dy = 0;
+    for (int i = 0; i < 30; ++i) srv_motion_update(s, &dx, &dy);
+    TEST_ASSERT_EQUAL_INT8(0, dx);
+    TEST_ASSERT_LESS_THAN_INT8(0, dy);
+}
+
+void test_sensitivity_scales_output(void)
+{
+    motion_config_t c = default_cfg();
+    c.sens_x_milli = 2000;
+    srv_motion_init(&c);
+    float s[AG_MIX_COUNT];
+    zero_signals(s);
+    s[AG_MIX_PITCH] = 0.02f;
+    int8_t dx_2x = 0, dy = 0;
+    for (int i = 0; i < 30; ++i) srv_motion_update(s, &dx_2x, &dy);
+
+    c.sens_x_milli = 1000;
+    srv_motion_init(&c);
+    int8_t dx_1x = 0;
+    for (int i = 0; i < 30; ++i) srv_motion_update(s, &dx_1x, &dy);
+
+    TEST_ASSERT_GREATER_THAN_INT8(dx_1x, dx_2x);
+}
+
+void test_clutch_zeros_output(void)
+{
+    float s[AG_MIX_COUNT];
+    zero_signals(s);
+    s[AG_MIX_PITCH] = 0.1f;
     int8_t dx, dy;
-
-    /* Positive pitch → positive dx. */
-    prime_with_identity();
-    quat_t qpp = quat_y(0.10f);
-    srv_motion_update(&qpp, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE_MESSAGE(dx > 0, "positive pitch should yield positive dx");
-
-    /* Negative pitch → negative dx. */
-    srv_motion_reset(); prime_with_identity();
-    quat_t qpn = quat_y(-0.10f);
-    srv_motion_update(&qpn, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE_MESSAGE(dx < 0, "negative pitch should yield negative dx");
-
-    /* Positive yaw → negative dx (mirrored — combines with pitch). */
-    srv_motion_reset(); prime_with_identity();
-    quat_t qyp = quat_z(0.10f);
-    srv_motion_update(&qyp, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE_MESSAGE(dx < 0, "positive yaw should yield negative dx");
-
-    /* Positive roll → negative dy (dy is negated so hand-down = cursor-down). */
-    srv_motion_reset(); prime_with_identity();
-    quat_t qrp = quat_x(0.10f);
-    srv_motion_update(&qrp, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE_MESSAGE(dy < 0, "positive roll should yield negative dy");
-
-    /* Negative roll → positive dy. */
-    srv_motion_reset(); prime_with_identity();
-    quat_t qrn = quat_x(-0.10f);
-    srv_motion_update(&qrn, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE_MESSAGE(dy > 0, "negative roll should yield positive dy");
-}
-
-/* 8. Engaging the clutch forces zero output; releasing restores it. */
-static void test_clutch_zeros_output(void)
-{
-    prime_with_identity();
-    int8_t dx, dy;
+    for (int i = 0; i < 20; ++i) srv_motion_update(s, &dx, &dy);
+    TEST_ASSERT_NOT_EQUAL_INT8(0, dx);
 
     srv_motion_set_clutch(true);
-    quat_t q1 = quat_y(0.10f);
-    srv_motion_update(&q1, 0.01f, &dx, &dy);
-    TEST_ASSERT_EQUAL_INT(0, (int)dx);
-    TEST_ASSERT_EQUAL_INT(0, (int)dy);
-
-    /* Release clutch. Previous was updated under clutch, so feed a
-     * fresh non-zero delta by rotating further. */
-    srv_motion_set_clutch(false);
-    quat_t q2 = quat_y(0.20f);
-    srv_motion_update(&q2, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE_MESSAGE(dx != 0, "output should resume after clutch release");
+    srv_motion_update(s, &dx, &dy);
+    TEST_ASSERT_EQUAL_INT8(0, dx);
+    TEST_ASSERT_EQUAL_INT8(0, dy);
 }
 
-/* 9. Extreme deltas saturate to the int8 range, never overflow. */
-static void test_output_bounded_to_int8(void)
+void test_deadzone_kills_tiny_motion(void)
 {
+    float s[AG_MIX_COUNT];
+    zero_signals(s);
+    s[AG_MIX_PITCH] = 0.001f;
     int8_t dx, dy;
-
-    prime_with_identity();
-    quat_t qbig = quat_y(1.5f);   /* ~86 deg, far above cap */
-    srv_motion_update(&qbig, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE(dx >= -127 && dx <= 127);
-    TEST_ASSERT_TRUE(dy >= -127 && dy <= 127);
-
-    srv_motion_reset(); prime_with_identity();
-    quat_t qneg = quat_y(-1.5f);
-    srv_motion_update(&qneg, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE(dx >= -127 && dx <= 127);
-    TEST_ASSERT_TRUE(dy >= -127 && dy <= 127);
+    for (int i = 0; i < 50; ++i) srv_motion_update(s, &dx, &dy);
+    TEST_ASSERT_EQUAL_INT8(0, dx);
+    TEST_ASSERT_EQUAL_INT8(0, dy);
 }
 
-/* 10. After `srv_motion_reset`, the next call behaves like a first call. */
-static void test_reset_reestablishes_first_frame(void)
+void test_disabled_axis_contributes_nothing(void)
 {
-    prime_with_identity();
+    motion_config_t c = default_cfg();
+    srv_motion_init(&c);
+    float s[AG_MIX_COUNT];
+    zero_signals(s);
+    s[AG_MIX_AX] = 5.0f;
     int8_t dx, dy;
-
-    quat_t q = quat_y(0.10f);
-    srv_motion_update(&q, 0.01f, &dx, &dy);
-    TEST_ASSERT_TRUE_MESSAGE(dx != 0, "sanity: pre-reset should produce output");
-
-    srv_motion_reset();
-    srv_motion_update(&q, 0.01f, &dx, &dy);        /* first call post-reset */
-    TEST_ASSERT_EQUAL_INT(0, (int)dx);
-    TEST_ASSERT_EQUAL_INT(0, (int)dy);
+    for (int i = 0; i < 30; ++i) srv_motion_update(s, &dx, &dy);
+    TEST_ASSERT_EQUAL_INT8(0, dx);
+    TEST_ASSERT_EQUAL_INT8(0, dy);
 }
 
-/* 11. NULL pointer arguments are rejected. */
-static void test_null_args_rejected(void)
+int main(int /*argc*/, char ** /*argv*/)
 {
-    int8_t dx, dy;
-    quat_t q = quat_y(0.10f);
-    TEST_ASSERT_EQUAL_INT(AG_ERR_ARG, srv_motion_update(nullptr, 0.01f, &dx, &dy));
-    TEST_ASSERT_EQUAL_INT(AG_ERR_ARG, srv_motion_update(&q, 0.01f, nullptr, &dy));
-    TEST_ASSERT_EQUAL_INT(AG_ERR_ARG, srv_motion_update(&q, 0.01f, &dx, nullptr));
-}
-
-/* ── Entry point ──────────────────────────────────────────────────────── */
-
-int main(int argc, char **argv)
-{
-    (void)argc; (void)argv;
     UNITY_BEGIN();
-    RUN_TEST(test_init_rejects_null);
-    RUN_TEST(test_init_rejects_bad_config);
-    RUN_TEST(test_first_call_returns_zero);
-    RUN_TEST(test_identical_q_returns_zero);
-    RUN_TEST(test_below_deadzone_returns_zero);
-    RUN_TEST(test_doubling_input_is_monotonic);
-    RUN_TEST(test_sign_preservation);
-    RUN_TEST(test_clutch_zeros_output);
-    RUN_TEST(test_output_bounded_to_int8);
-    RUN_TEST(test_reset_reestablishes_first_frame);
     RUN_TEST(test_null_args_rejected);
+    RUN_TEST(test_init_rejects_zero_sens);
+    RUN_TEST(test_zero_signals_yield_zero_output);
+    RUN_TEST(test_pitch_drives_dx_positive);
+    RUN_TEST(test_yaw_drives_dx_negative);
+    RUN_TEST(test_roll_drives_dy_negative);
+    RUN_TEST(test_sensitivity_scales_output);
+    RUN_TEST(test_clutch_zeros_output);
+    RUN_TEST(test_deadzone_kills_tiny_motion);
+    RUN_TEST(test_disabled_axis_contributes_nothing);
     return UNITY_END();
 }

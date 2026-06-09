@@ -31,11 +31,21 @@ constexpr char kNvsNamespace[] = "agcfg";
 constexpr char kNvsKey[]       = "cfg";
 
 /* Wire format v2 — see docs/plans/11-companion-app-firmware-extensions.md §11.2. */
-constexpr uint8_t kConfigVersion = 2;
-constexpr size_t  kConfigSize    = 28;
+constexpr uint8_t kConfigVersion = 3;
+/* v3 layout: 28 (v2 fields) + 1 (madgwick_enabled) + 2·9·2 (mix matrix) = 65. */
+constexpr size_t  kConfigSize    = 65;
 constexpr size_t  kTelemetrySize = 24;
 constexpr size_t  kStatusSize    = 4;
 
+/* Defaults reproduce the pre-mix-matrix behaviour: cursor follows fused
+ * pitch and yaw (pitch + yaw → dx, roll → dy with the historical signs).
+ * `gain_low ≈ 400` per radian is folded into a unit (1000) mix weight ×
+ * the sens_x/y multipliers, so users can dial both via the UI later.
+ *
+ * mix_x layout (one entry per AG_MIX_*):
+ *   {gx=0, gy=0, gz=0, ax=0, ay=0, az=0, roll=0, pitch=+1000, yaw=-1000}
+ * mix_y:
+ *   {gx=0, gy=0, gz=0, ax=0, ay=0, az=0, roll=-1000, pitch=0, yaw=0}                       */
 const dd_ble_cfg_t kBuiltinDefaults = {
     /* sens_x_milli        */ 1000,
     /* sens_y_milli        */ 1000,
@@ -51,6 +61,9 @@ const dd_ble_cfg_t kBuiltinDefaults = {
     },
     /* modifier_pad        */ AG_NO_MODIFIER,
     /* click_action_alt[]  */ {AG_CLICK_NONE, AG_CLICK_NONE, AG_CLICK_NONE},
+    /* madgwick_enabled    */ 1,
+    /* mix_x_milli[]       */ { 0, 0, 0, 0, 0, 0,    0, +1000, -1000 },
+    /* mix_y_milli[]       */ { 0, 0, 0, 0, 0, 0, -1000,     0,     0 },
 };
 
 static dd_ble_cfg_t   s_cfg              = kBuiltinDefaults;
@@ -75,15 +88,30 @@ static inline void put_u16(uint8_t *p, uint16_t v) {
 static inline uint16_t get_u16(const uint8_t *p) {
     return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));
 }
+static inline void put_i16(uint8_t *p, int16_t v) {
+    put_u16(p, (uint16_t)v);
+}
+static inline int16_t get_i16(const uint8_t *p) {
+    return (int16_t)get_u16(p);
+}
 
-/* Clamp helper. */
+/* Clamp helpers. */
 static inline uint16_t clamp_u16(uint16_t v, uint16_t lo, uint16_t hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+static inline int16_t clamp_i16(int16_t v, int16_t lo, int16_t hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
 static inline uint8_t clamp_action(uint8_t a) {
     return (a > AG_CLICK_MAX) ? AG_CLICK_NONE : a;
 }
 
+/* Wire layout v3 (65 bytes). Offsets up to 27 unchanged from v2 so the
+ * existing fields keep the same on-the-wire position. New tail:
+ *   [28]      madgwick_enabled       u8
+ *   [29..46]  mix_x_milli[9]         9 × i16 little-endian
+ *   [47..64]  mix_y_milli[9]         9 × i16 little-endian
+ */
 static void encode_config(uint8_t buf[kConfigSize], const dd_ble_cfg_t *c) {
     buf[0] = kConfigVersion;
     buf[1] = 0;                                      /* flags (clean)       */
@@ -96,9 +124,12 @@ static void encode_config(uint8_t buf[kConfigSize], const dd_ble_cfg_t *c) {
     for (int i = 0; i < 4; ++i) buf[20 + i] = c->click_action[i];
     buf[24] = c->modifier_pad;
     for (int i = 0; i < 3; ++i) buf[25 + i] = c->click_action_alt[i];
+    buf[28] = c->madgwick_enabled ? 1 : 0;
+    for (int i = 0; i < AG_MIX_COUNT; ++i) put_i16(&buf[29 + i * 2], c->mix_x_milli[i]);
+    for (int i = 0; i < AG_MIX_COUNT; ++i) put_i16(&buf[47 + i * 2], c->mix_y_milli[i]);
 }
 
-/* Parse, version-check, and clamp a v2 (28-byte) config blob.
+/* Parse, version-check, and clamp a v3 (65-byte) config blob.
  * No fallback: a wrong size or wrong version is a hard reject. */
 static bool decode_config(dd_ble_cfg_t *c, const uint8_t *p, size_t n) {
     if (n < kConfigSize)        return false;
@@ -121,6 +152,11 @@ static bool decode_config(dd_ble_cfg_t *c, const uint8_t *p, size_t n) {
          * to keep modifier+alt semantics simple. */
         if (a == AG_CLICK_CLUTCH || a == AG_CLICK_SCROLL_MODE) a = AG_CLICK_NONE;
         c->click_action_alt[i] = a;
+    }
+    c->madgwick_enabled = (p[28] != 0) ? 1 : 0;
+    for (int i = 0; i < AG_MIX_COUNT; ++i) {
+        c->mix_x_milli[i] = clamp_i16(get_i16(&p[29 + i * 2]), -2000, +2000);
+        c->mix_y_milli[i] = clamp_i16(get_i16(&p[47 + i * 2]), -2000, +2000);
     }
     return true;
 }
@@ -149,12 +185,13 @@ public:
         portEXIT_CRITICAL(&s_mux);
         /* Re-publish a canonical (clean-flag) value so reads are consistent. */
         seed_config_characteristic();
-        printf("[dd_ble_cfg] config v2: sensX=%u sensY=%u dz=%umrad "
-               "beta=%u debounce=%ums mod=%u "
+        printf("[dd_ble_cfg] config v3: sensX=%u sensY=%u dz=%umrad "
+               "beta=%u debounce=%ums mod=%u madgwick=%u "
                "click=[%u,%u,%u,%u] alt=[%u,%u,%u]\n",
                parsed.sens_x_milli, parsed.sens_y_milli,
                parsed.deadzone_mrad, parsed.madgwick_beta_milli,
                parsed.debounce_ms, (unsigned)parsed.modifier_pad,
+               (unsigned)parsed.madgwick_enabled,
                parsed.click_action[0], parsed.click_action[1],
                parsed.click_action[2], parsed.click_action[3],
                parsed.click_action_alt[0], parsed.click_action_alt[1],

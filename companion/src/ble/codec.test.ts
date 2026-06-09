@@ -9,16 +9,16 @@ import {
 import {
   AgConfig,
   ClickAction,
-  CONFIG_VERSION_V2,
+  CONFIG_VERSION_V3,
   defaultConfig,
   NO_MODIFIER,
   StatusState,
 } from "./types";
 
-describe("config codec (v2)", () => {
+describe("config codec (v3)", () => {
   it("round-trips a populated config", () => {
     const cfg: AgConfig = {
-      version: CONFIG_VERSION_V2,
+      version: CONFIG_VERSION_V3,
       flags: 0,
       sensXMilli: 1400,
       sensYMilli: 1200,
@@ -34,14 +34,38 @@ describe("config codec (v2)", () => {
       ],
       modifierPad: 0,
       clickActionAlt: [ClickAction.None, ClickAction.ScrollDown, ClickAction.Middle],
+      madgwickEnabled: true,
+      mixX: [0, 0, 0, 0, 0, 0, 0, 1000, -1000],
+      mixY: [0, 0, 0, 0, 0, 0, -1700, 0, 0],
     };
     const dv = new DataView(encodeConfig(cfg).buffer);
     expect(decodeConfig(dv)).toEqual(cfg);
   });
 
-  it("emits the v2 version byte", () => {
+  it("round-trips arbitrary mix-matrix weights (incl. negatives)", () => {
+    const cfg = defaultConfig();
+    cfg.mixX = [+500, -500, +1500, -1500, +2000, -2000, 0, +123, -123];
+    cfg.mixY = [-1, +1, +0, +777, -777, +1999, -1999, 0, 0];
+    cfg.madgwickEnabled = false;
+    const dv = new DataView(encodeConfig(cfg).buffer);
+    const back = decodeConfig(dv);
+    expect(back.mixX).toEqual(cfg.mixX);
+    expect(back.mixY).toEqual(cfg.mixY);
+    expect(back.madgwickEnabled).toBe(false);
+  });
+
+  it("clamps out-of-range mix weights to ±2000", () => {
+    const cfg = defaultConfig();
+    cfg.mixX = [99999, -99999, 0, 0, 0, 0, 0, 0, 0];
+    const dv = new DataView(encodeConfig(cfg).buffer);
+    const back = decodeConfig(dv);
+    expect(back.mixX[0]).toBe(2000);
+    expect(back.mixX[1]).toBe(-2000);
+  });
+
+  it("emits the v3 version byte", () => {
     const bytes = encodeConfig(defaultConfig());
-    expect(bytes[0]).toBe(CONFIG_VERSION_V2);
+    expect(bytes[0]).toBe(CONFIG_VERSION_V3);
     expect(bytes.length).toBe(CONFIG_SIZE);
   });
 

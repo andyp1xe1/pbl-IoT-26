@@ -41,12 +41,19 @@ typedef enum {
 /* Sentinel: modifier_pad == AG_NO_MODIFIER → no chord modifier set. */
 #define AG_NO_MODIFIER  ((uint8_t)0xFF)
 
+/* Motion-mix axes (AG_MIX_*) live in ag_types.h so srv_motion can consume
+ * the enum without pulling dd_ble_cfg into its include path. */
+
 /* Runtime tuning, in logical units (no wire encoding leaks to callers).
- * Layout mirrors Plan 11.2 / wire format v2 (28 bytes). */
+ * Layout mirrors Plan 11.4 / wire format v3 (65 bytes).
+ *
+ * Motion mapping is: dx = Σ mix_x[i]·signal[i],  dy = Σ mix_y[i]·signal[i],
+ * then × sens, then radial deadzone + gain curve + clamp. Each mix weight
+ * is a signed ×1000 multiplier ("milli"); range ±2000 = ±2.0. */
 typedef struct {
     uint16_t sens_x_milli;             /* X sensitivity ×1000 (1000 = 1.00×) */
     uint16_t sens_y_milli;             /* Y sensitivity ×1000                */
-    uint16_t deadzone_mrad;            /* per-frame angular deadzone (m-rad) */
+    uint16_t deadzone_mrad;            /* radial deadzone (m-rad)            */
     uint16_t madgwick_beta_milli;      /* Madgwick β ×1000                   */
     uint16_t debounce_ms;              /* per-pad debounce, ms               */
     uint16_t touch_threshold[4];       /* per-pad raw-count threshold        */
@@ -54,6 +61,10 @@ typedef struct {
     uint8_t  modifier_pad;             /* pad index 0..3, or AG_NO_MODIFIER  */
     uint8_t  click_action_alt[3];      /* alt action for non-modifier pads,
                                           indexed by the non-modifier slot   */
+    uint8_t  madgwick_enabled;         /* 1 = run fusion task, expose fused
+                                          rates as mix inputs                */
+    int16_t  mix_x_milli[AG_MIX_COUNT]; /* per-axis weight into cursor dx    */
+    int16_t  mix_y_milli[AG_MIX_COUNT]; /* per-axis weight into cursor dy    */
 } dd_ble_cfg_t;
 
 /* One live telemetry frame pushed to the host. */
