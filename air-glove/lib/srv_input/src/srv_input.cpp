@@ -26,7 +26,6 @@ typedef enum {
 
 static pad_state_t s_state  [TOUCH_PAD_COUNT];
 static uint16_t    s_counter[TOUCH_PAD_COUNT];
-static uint64_t    s_last_press_t_us[TOUCH_PAD_COUNT];
 
 /* Default debounce = 15 ms → 2 ticks at the assumed 10 ms sample period. */
 static uint16_t    s_debounce_ticks = 2;
@@ -37,11 +36,6 @@ static uint16_t    s_debounce_ticks = 2;
  * normalises to 0 = pressed / 4095 = open) trip with any value < 600. */
 static uint16_t    s_threshold[TOUCH_PAD_COUNT] = {600, 600, 600, 600};
 
-/* Chord window (future E10). Kept as static data so callers do not pay
- * for it until a chord API is introduced in Phase II. */
-static const uint16_t kChordWindowTicks __attribute__((unused)) = 3; /* 30 ms */
-static bool           s_chord_flag      __attribute__((unused)) = false;
-
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
 static void clear_state_all(void)
@@ -49,9 +43,7 @@ static void clear_state_all(void)
     for (size_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
         s_state  [i] = PAD_IDLE;
         s_counter[i] = 0;
-        s_last_press_t_us[i] = 0;
     }
-    s_chord_flag = false;
 }
 
 static inline void emit(input_event_t *out, size_t out_cap, size_t *out_len,
@@ -129,7 +121,6 @@ extern "C" ag_result_t srv_input_process(const touch_sample_t *s,
                 if (s_counter[i] >= s_debounce_ticks) {
                     s_state  [i] = PAD_PRESSED;
                     s_counter[i] = 0;
-                    s_last_press_t_us[i] = s->t_us;
                     emit(out, out_cap, out_len,
                          (touch_pad_id_t)i, INPUT_EVT_PRESS, s->t_us);
                 }
@@ -172,13 +163,8 @@ extern "C" ag_result_t srv_input_process(const touch_sample_t *s,
         }
     }
 
-    /* Chord book-keeping (future E10 hook).
-     * TODO(E10): compare last_press_t_us[INDEX] and last_press_t_us[MIDDLE];
-     * if both fall within kChordWindowTicks * 10 000 µs of s->t_us, set
-     * s_chord_flag true for a later srv_input_get_chord() API.
-     * Phase I intentionally emits no chord event. */
-    (void)kChordWindowTicks;
-    (void)s_chord_flag;
-
+    /* Chord detection lives in t_app via the data-driven modifier_pad +
+     * click_action_alt[] model (Plan 11.3); srv_input emits only per-pad
+     * PRESS / RELEASE and stays out of that layer. */
     return AG_OK;
 }
