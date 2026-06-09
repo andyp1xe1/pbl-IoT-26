@@ -128,6 +128,16 @@ body {
   color: #fff;
 }
 
+.nav-item-locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.nav-item-locked:hover {
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+
 .nav-bottom {
   display: flex;
   position: fixed;
@@ -169,41 +179,35 @@ body {
   margin-top: auto;
 }
 
-/* ---------- Connection chip ---------- */
-
-.conn-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.conn-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.conn-good .conn-dot {
-  background: var(--good);
-}
-.conn-warn .conn-dot {
-  background: var(--warn);
-}
-.conn-batt {
-  color: var(--muted);
-}
-
 /* ---------- Screen + grid ---------- */
 
 .screen-head {
   margin: 12px 4px 30px;
+}
+
+/* Home screen treats the page as a centered hero: title + artwork +
+ * controls form one visual cluster that floats in the middle of the
+ * viewport. Centering happens at the .screen level so the title travels
+ * with the rest of the content — otherwise the screen-head is pinned to
+ * the top by the page padding and the cluster below it sinks. */
+.screen:has(.device-grid) {
+  min-height: calc(100vh - 200px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.screen:has(.device-grid) .screen-head {
+  margin: 4px 4px 24px;
+  text-align: center;
+}
+
+.screen:has(.device-grid) .screen-title {
+  font-size: clamp(28px, 3.6vw, 40px);
+}
+
+.screen:has(.device-grid) .screen-sub {
+  margin: 8px auto 0;
 }
 
 .screen-title {
@@ -230,6 +234,38 @@ body {
   align-items: start;
 }
 
+/* Tune screen: explicit named-area grid so Pointer + Fusion live in a left
+ * column, the taller Touch card spans both rows on the right, and Click
+ * mapping sits on its own full-width row below. Avoids the auto-fit
+ * cascade that left Click mapping orphaned in row 2 with empty space. */
+.tune-layout {
+  display: grid;
+  gap: 22px;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "pointer"
+    "fusion"
+    "touch"
+    "click";
+  align-items: start;
+}
+
+.tune-pointer { grid-area: pointer; }
+.tune-fusion  { grid-area: fusion;  }
+.tune-touch   { grid-area: touch;   }
+.tune-click   { grid-area: click;   }
+
+@media (min-width: 900px) {
+  .tune-layout {
+    gap: 28px 32px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    grid-template-areas:
+      "pointer touch"
+      "fusion  touch"
+      "click   click";
+  }
+}
+
 /* ---------- Cards / sections ---------- */
 
 .section {
@@ -243,6 +279,31 @@ body {
   letter-spacing: 0.06em;
   color: var(--muted);
   margin: 0 0 10px 14px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-right: 14px;
+}
+
+.section-head .section-title {
+  margin-bottom: 10px;
+}
+
+/* Diagnostic readout (e.g. measured telemetry Hz on Calibrate). Tiny
+ * monospaced pill so it reads as instrumentation, not chrome. */
+.hz-badge {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
 }
 
 .section-footer {
@@ -289,8 +350,84 @@ body {
   color: var(--muted);
 }
 
+/* Dash placeholder for "no value to show" — slightly dimmer than .row-value
+ * so it reads as "empty" not "value is dash". */
+.row-value-empty {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
 .error-text {
   color: var(--danger);
+}
+
+/* ---------- Switch (GNOME-style pill toggle) ---------- */
+
+.switch {
+  --switch-w: 50px;
+  --switch-h: 28px;
+  --switch-pad: 3px;
+  width: var(--switch-w);
+  height: var(--switch-h);
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  position: relative;
+  cursor: pointer;
+  transition: background 160ms ease, box-shadow 160ms ease;
+  flex: 0 0 auto;
+}
+
+.switch-thumb {
+  position: absolute;
+  top: var(--switch-pad);
+  left: var(--switch-pad);
+  width: calc(var(--switch-h) - 2 * var(--switch-pad));
+  height: calc(var(--switch-h) - 2 * var(--switch-pad));
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.08);
+  transition: transform 180ms cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+.switch-off {
+  background: rgba(121, 124, 147, 0.30);
+}
+.switch-off:hover:not(:disabled) {
+  background: rgba(121, 124, 147, 0.42);
+}
+
+.switch-on {
+  background: var(--accent);
+}
+.switch-on:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.switch-on .switch-thumb {
+  transform: translateX(calc(var(--switch-w) - var(--switch-h)));
+}
+
+.switch-busy {
+  background: var(--warn);
+  cursor: progress;
+}
+.switch-busy .switch-thumb {
+  animation: switch-pulse 900ms ease-in-out infinite;
+}
+@keyframes switch-pulse {
+  0%, 100% { opacity: 1;   }
+  50%      { opacity: 0.55; }
+}
+
+.switch-disabled,
+.switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(110, 132, 206, 0.35);
 }
 
 /* ---------- Pills ---------- */
@@ -350,17 +487,40 @@ body {
   background: #e0e6fd;
 }
 
-.btn-ghost-danger {
-  background: transparent;
-  color: var(--danger);
+/* Ghost buttons: visually a button, not text. Filled with a soft tint of
+ * their semantic colour so they read as actionable next to the primary
+ * fill, with the primary still leading the visual hierarchy. */
+.btn-ghost {
+  background: var(--accent-weak);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(110, 132, 206, 0.22);
 }
-.btn-ghost-danger:hover {
-  background: rgba(229, 72, 77, 0.08);
+.btn-ghost:hover:not(:disabled) {
+  background: #e0e6fd;
+  box-shadow: inset 0 0 0 1px rgba(110, 132, 206, 0.36);
+}
+
+.btn-ghost-danger {
+  background: rgba(223, 96, 99, 0.10);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px rgba(223, 96, 99, 0.22);
+}
+.btn-ghost-danger:hover:not(:disabled) {
+  background: rgba(223, 96, 99, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(223, 96, 99, 0.36);
 }
 
 .btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* Stacked connect/reconnect buttons inside <EmptyState action>. */
+.connect-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
 }
 
 /* ---------- Lists ---------- */
@@ -404,6 +564,55 @@ input[type="range"] {
   accent-color: var(--accent);
 }
 
+/* ---------- Select (action picker) ---------- */
+
+/* The Click-mapping rows used to render bare <select> elements which fell
+ * back to the OS chrome — black border, native chevron — visibly out of
+ * place against the rest of the surface. Style them as pill-shaped,
+ * accent-tinted controls with a custom chevron so they read as part of
+ * the same UI family as buttons and pills. */
+.action-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--accent-weak);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%236e84ce' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1.5l5 5 5-5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 11px 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--accent);
+  font: 600 14px var(--font-ui);
+  padding: 8px 32px 8px 14px;
+  min-width: 168px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.action-select:hover {
+  background-color: #e4ebfb;
+}
+
+.action-select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background-color: #fff;
+}
+
+.action-select:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Native <option> styling is OS-controlled — leave it alone, but make sure
+ * the open menu inherits a readable color (some browsers apply the parent
+ * color to options). */
+.action-select option {
+  color: var(--text);
+  background: #fff;
+}
+
 /* ---------- Touch bars ---------- */
 
 .touch-row {
@@ -411,10 +620,60 @@ input[type="range"] {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
+}
+
+/* Live-only TouchBar usage (e.g. Calibrate screen) still needs a divider. */
+.card > .touch-row {
   border-bottom: 1px solid var(--border);
 }
-.touch-row:last-child {
+.card > .touch-row:last-child {
   border-bottom: none;
+}
+
+/* Grouped (bar + threshold slider) cell in the Tune screen Touch card.
+ * One border per pad group, not per row, so the bar and the slider read
+ * as a single control unit. */
+.touch-tune {
+  padding: 12px 4px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.touch-tune:last-child {
+  border-bottom: none;
+}
+
+.touch-tune .touch-row {
+  padding-bottom: 4px;
+}
+
+.touch-tune-thresh {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px 0 74px; /* left indent matches .touch-label width + gap */
+}
+
+.touch-tune-thresh-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.touch-tune-thresh input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.touch-tune-thresh-value {
+  width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
 }
 
 .touch-label {
@@ -554,7 +813,218 @@ input[type="range"] {
   }
 }
 
-/* ---------- Empty / fallback state ---------- */
+/* ---------- Device screen ---------- */
+
+/* Home layout: content flows from just below the title with consistent
+ * spacing — no vertical centering (was leaving a wide gap between the
+ * title and the cluster). Stack is: artwork → switches → forget → info,
+ * with rhythm-aligned gaps. */
+.device-grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.device-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+  max-width: 460px;
+}
+
+/* Tighter gap above the Info card so the Forget button doesn't feel
+ * crammed between two cards. */
+.device-stage > .section + .section {
+  margin-top: 4px;
+}
+
+/* Centered "INFO" label so the section header aligns with the centered
+ * page title rather than reading as left-justified body text. */
+.device-stage .section-title {
+  margin: 0 0 10px;
+  text-align: center;
+}
+
+/* The board image is used as a *mask* — `mask-image` punches the board's
+ * shape out of a solid-colour div. State changes are pure background-color
+ * swaps, with a smooth transition between them. No blurry glows, no
+ * filter chains, no grayscale: the alpha of the mask image carries all
+ * tonal detail and the background paints the colour. */
+.artwork {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.device-art,
+.empty-art {
+  background-color: var(--accent);
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  transition: background-color 280ms ease;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* The mask images have fixed aspect ratios — set them per kind so the
+ * masked div reserves the right bounding box without needing an <img>. */
+.device-art {
+  width: clamp(280px, 78%, 440px);
+}
+
+.empty-art {
+  width: clamp(280px, 60%, 460px);
+}
+
+.artwork-flat .device-art,
+.artwork-flat .empty-art {
+  aspect-ratio: 800 / 323;
+}
+
+.artwork-iso .device-art,
+.artwork-iso .empty-art {
+  aspect-ratio: 908 / 800;
+}
+
+/* The iso silhouette is squarer than the flat one, so it visually wants
+ * to be a touch smaller to keep similar weight on the page. */
+.artwork-iso .device-art {
+  width: clamp(220px, 54%, 320px);
+}
+.artwork-iso .empty-art {
+  width: clamp(220px, 44%, 340px);
+}
+
+/* ── State colours (single CSS property changes per state) ──────────── */
+
+.artwork-busy .device-art,
+.artwork-busy .empty-art {
+  background-color: var(--warn);
+  animation: art-shake 1.1s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
+}
+@keyframes art-shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-4px) rotate(-0.6deg); }
+  40%      { transform: translateX( 4px) rotate( 0.6deg); }
+  60%      { transform: translateX(-3px) rotate(-0.4deg); }
+  80%      { transform: translateX( 3px) rotate( 0.4deg); }
+}
+
+.artwork-sleeping .device-art,
+.artwork-sleeping .empty-art {
+  background-color: var(--muted);
+}
+
+.artwork-offline .device-art,
+.artwork-offline .empty-art {
+  background-color: var(--muted);
+}
+
+.artwork-error .device-art,
+.artwork-error .empty-art {
+  background-color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artwork-busy .device-art,
+  .artwork-busy .empty-art {
+    animation: none;
+  }
+}
+
+.device-stage .section {
+  width: 100%;
+}
+
+.device-caption {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 38ch;
+}
+
+.device-caption-error {
+  color: var(--danger);
+}
+
+/* Inline failure banner shown directly under the artwork on Home when the
+ * last connect attempt failed. Soft danger-tinted pill rather than full
+ * caption — it sits between the artwork and the controls so the reason
+ * is right next to the switch that's now off. */
+.device-error {
+  margin: 4px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(223, 96, 99, 0.10);
+  border: 1px solid rgba(223, 96, 99, 0.25);
+  color: var(--danger);
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-align: center;
+  max-width: 42ch;
+}
+
+/* Forget button: full-width to match the switches/info cards on either
+ * side of it, so the stack reads as a uniform column rather than a
+ * floating pill between two cards. */
+.device-forget {
+  width: 100%;
+  margin: 2px 0;
+}
+
+/* Pair-device CTA: the only control on the unpaired screen, so it stands
+ * proud — a touch larger and roomier than the standard .btn. */
+.device-pair {
+  width: 100%;
+  padding: 16px 18px;
+  font-size: 17px;
+}
+
+/* ---------- Skeleton placeholders ---------- */
+
+.skeleton {
+  display: inline-block;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(121, 124, 147, 0.10) 0%,
+    rgba(121, 124, 147, 0.22) 50%,
+    rgba(121, 124, 147, 0.10) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-text {
+  width: 92px;
+  height: 14px;
+  vertical-align: middle;
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* ---------- Empty / fallback state ----------
+ * Shared visual rhythm for every "non-table" screen state:
+ *   [board artwork] → [title + caption] → [stacked actions]
+ * The artwork is a single PNG/WebP asset rendered with low opacity so it
+ * sits as wallpaper behind the content without competing with it. */
 
 .empty-state {
   display: flex;
@@ -562,92 +1032,47 @@ input[type="range"] {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 16px 24px 64px;
-  gap: 32px;
+  padding: 12px 24px 48px;
+  gap: 22px;
   color: var(--muted);
 }
 
 .empty-art {
-  width: 520px;
-  height: auto;
+  position: relative;
+  z-index: 1;
+  width: auto;
+  height: clamp(220px, 38vh, 360px);
   max-width: 88%;
-  color: var(--accent);
-  opacity: 0.62;
+  user-select: none;
+  -webkit-user-drag: none;
+  transform: rotateX(18deg) rotateZ(-3deg);
+  transform-origin: 50% 80%;
+  filter:
+    drop-shadow(0 20px 28px rgba(110, 132, 206, 0.22))
+    drop-shadow(0 2px 0 rgba(110, 132, 206, 0.18))
+    drop-shadow(2px -2px 0 rgba(217, 154, 58, 0.10));
 }
 
-.empty-art * {
-  vector-effect: non-scaling-stroke;
-}
-
-.empty-art-wire {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.25;
-  stroke-dasharray: 3 4;
-  opacity: 0.55;
-}
-
-.empty-art-imu {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-}
-
-.empty-art-imu rect {
-  fill: var(--surface);
-}
-
-.empty-art-imu circle {
-  fill: currentColor;
-  stroke: none;
-  opacity: 0.6;
-}
-
-.empty-art-label {
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  fill: currentColor;
-  stroke: none;
-}
-
-.empty-art-pad circle {
-  fill: var(--surface);
-  stroke: currentColor;
-  stroke-width: 1.5;
-}
-
-.empty-art-pad-label {
-  font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 700;
-  fill: currentColor;
-  stroke: none;
-  letter-spacing: 0.02em;
-}
-
-.empty-art-wrist {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  opacity: 0.4;
+.empty-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 36ch;
 }
 
 .empty-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);
 }
 
 .empty-caption {
-  margin: -20px 0 0;
-  max-width: 30ch;
-  font-size: 14px;
+  margin: 0;
+  font-size: 15px;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -658,7 +1083,8 @@ input[type="range"] {
 }
 
 .empty-action {
-  margin-top: 6px;
+  margin-top: 4px;
+  width: min(320px, 100%);
 }
 
 /* ---------- Always-visible version badge ---------- */

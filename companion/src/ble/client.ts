@@ -42,6 +42,7 @@ import {
   ConnectionStatus,
   DeviceInfo,
   IAirGloveClient,
+  KnownDevice,
 } from "./types";
 import {
   BATTERY_LEVEL,
@@ -68,6 +69,12 @@ export class AirGloveClient implements IAirGloveClient {
   private server: BluetoothRemoteGATTServer | null = null;
   private configChar: BluetoothRemoteGATTCharacteristic | null = null;
   private commandChar: BluetoothRemoteGATTCharacteristic | null = null;
+  private telemetryChar: BluetoothRemoteGATTCharacteristic | null = null;
+
+  get currentDevice(): import("./types").KnownDevice | null {
+    if (!this.device) return null;
+    return { id: this.device.id, name: this.device.name ?? "AirGlove" };
+  }
 
   private connectionCbs: ((s: ConnectionStatus) => void)[] = [];
   private telemetryCbs: ((t: AgTelemetry) => void)[] = [];
@@ -98,74 +105,151 @@ export class AirGloveClient implements IAirGloveClient {
       // and does not put the 128-bit config service UUID in its (size-limited)
       // advertisement. The custom service is discovered after connecting.
       log.step("requestDevice", { namePrefix: "AirGlove" });
-      this.device = await withPhase("scan", () =>
+      const device = await withPhase("scan", () =>
         navigator.bluetooth.requestDevice({
           filters: [{ namePrefix: "AirGlove" }],
           optionalServices: [CONFIG_SERVICE, DIS_SERVICE, BATTERY_SERVICE],
         }),
       );
-      log.info("device picked", { name: this.device.name, id: this.device.id });
-
-      this.device.addEventListener("gattserverdisconnected", () => {
-        log.warn("gattserverdisconnected — link dropped");
-        this.emitConnection("disconnected");
-      });
-
-      log.step("gatt.connect");
-      const server = await withPhase("link", () => this.device!.gatt!.connect());
-      this.server = server;
-      log.info("GATT connected");
-
-      log.step("getPrimaryService", CONFIG_SERVICE);
-      const svc = await withPhase("service", () =>
-        server.getPrimaryService(CONFIG_SERVICE),
-      );
-
-      log.step("getCharacteristic", "config + command");
-      this.configChar = await withPhase("characteristic", () =>
-        svc.getCharacteristic(CONFIG_CHAR),
-      );
-      this.commandChar = await withPhase("characteristic", () =>
-        svc.getCharacteristic(COMMAND_CHAR),
-      );
-
-      log.step("subscribe telemetry");
-      const telemetry = await withPhase("characteristic", () =>
-        svc.getCharacteristic(TELEMETRY_CHAR),
-      );
-      telemetry.addEventListener("characteristicvaluechanged", (e) => {
-        const dv = (e.target as BluetoothRemoteGATTCharacteristic).value;
-        if (dv) this.telemetryCbs.forEach((cb) => cb(decodeTelemetry(dv)));
-      });
-      await withPhase("notify", () => telemetry.startNotifications());
-
-      log.step("subscribe status");
-      const status = await withPhase("characteristic", () =>
-        svc.getCharacteristic(STATUS_CHAR),
-      );
-      status.addEventListener("characteristicvaluechanged", (e) => {
-        const dv = (e.target as BluetoothRemoteGATTCharacteristic).value;
-        if (dv) this.statusCbs.forEach((cb) => cb(decodeStatus(dv)));
-      });
-      await withPhase("notify", () => status.startNotifications());
-
-      log.info("connect complete");
-      this.emitConnection("connected");
+      log.info("device picked", { name: device.name, id: device.id });
+      await this.attach(device);
     } catch (err) {
-      const e = err as Error;
-      if (err instanceof BleConnectError) {
-        log.error(`connect failed at "${err.phase}": ${err.cause.name}`, err.cause);
-      } else {
-        log.error("connect failed", e);
-      }
-      this.emitConnection("disconnected");
+      this.handleConnectError(err);
       throw err;
     }
+  }
+
+  async reconnect(id?: string): Promise<void> {
+    if (!isWebBluetoothAvailable()) {
+      throw new Error("Web Bluetooth is not available in this browser.");
+    }
+    this.emitConnection("connecting");
+    try {
+      const known = await this.knownDevices();
+      const device = id ? known.find((d) => d.id === id) : known[0];
+      if (!device) {
+        // No remembered device — caller should fall back to connect().
+        // Throw a recognisable phase so the store can surface a sensible message.
+        throw new BleConnectError(
+          "scan",
+          Object.assign(new Error("No known device"), { name: "NotFoundError" }),
+        );
+      }
+      log.info("reconnecting to remembered device", { name: device.name, id: device.id });
+      await this.attach(device);
+    } catch (err) {
+      this.handleConnectError(err);
+      throw err;
+    }
+  }
+
+  async listKnownDevices(): Promise<KnownDevice[]> {
+    const devices = await this.knownDevices();
+    return devices.map((d) => ({ id: d.id, name: d.name ?? "AirGlove" }));
+  }
+
+  async forget(id?: string): Promise<void> {
+    const known = await this.knownDevices();
+    const device = id ? known.find((d) => d.id === id) : known[0];
+    if (!device) return;
+    const f = (device as BluetoothDevice & { forget?: () => Promise<void> }).forget;
+    if (typeof f !== "function") {
+      log.warn("BluetoothDevice.forget() unavailable in this browser");
+      return;
+    }
+    try {
+      await f.call(device);
+      log.info("forgot device", { name: device.name, id: device.id });
+    } catch (err) {
+      log.error("forget failed", err as Error);
+      throw err;
+    }
+  }
+
+  /** Browser-permission list, filtered to AirGlove devices. Empty if the
+   *  browser doesn't implement getDevices() (Safari, Firefox today). */
+  private async knownDevices(): Promise<BluetoothDevice[]> {
+    if (!isWebBluetoothAvailable()) return [];
+    const bt = navigator.bluetooth as Bluetooth & {
+      getDevices?: () => Promise<BluetoothDevice[]>;
+    };
+    if (typeof bt.getDevices !== "function") return [];
+    try {
+      const all = await bt.getDevices();
+      return all.filter((d) => (d.name ?? "").startsWith("AirGlove"));
+    } catch (err) {
+      log.warn("getDevices() failed", err as Error);
+      return [];
+    }
+  }
+
+  /** Shared post-pick flow: open GATT, discover, subscribe. */
+  private async attach(device: BluetoothDevice): Promise<void> {
+    this.device = device;
+    device.addEventListener("gattserverdisconnected", () => {
+      log.warn("gattserverdisconnected — link dropped");
+      this.emitConnection("disconnected");
+    });
+
+    log.step("gatt.connect");
+    const server = await withPhase("link", () => device.gatt!.connect());
+    this.server = server;
+    log.info("GATT connected");
+
+    log.step("getPrimaryService", CONFIG_SERVICE);
+    const svc = await withPhase("service", () =>
+      server.getPrimaryService(CONFIG_SERVICE),
+    );
+
+    log.step("getCharacteristic", "config + command");
+    this.configChar = await withPhase("characteristic", () =>
+      svc.getCharacteristic(CONFIG_CHAR),
+    );
+    this.commandChar = await withPhase("characteristic", () =>
+      svc.getCharacteristic(COMMAND_CHAR),
+    );
+
+    log.step("subscribe telemetry");
+    const telemetry = await withPhase("characteristic", () =>
+      svc.getCharacteristic(TELEMETRY_CHAR),
+    );
+    this.telemetryChar = telemetry;
+    telemetry.addEventListener("characteristicvaluechanged", (e) => {
+      const dv = (e.target as BluetoothRemoteGATTCharacteristic).value;
+      if (dv) this.telemetryCbs.forEach((cb) => cb(decodeTelemetry(dv)));
+    });
+    await withPhase("notify", () => telemetry.startNotifications());
+
+    log.step("subscribe status");
+    const status = await withPhase("characteristic", () =>
+      svc.getCharacteristic(STATUS_CHAR),
+    );
+    status.addEventListener("characteristicvaluechanged", (e) => {
+      const dv = (e.target as BluetoothRemoteGATTCharacteristic).value;
+      if (dv) this.statusCbs.forEach((cb) => cb(decodeStatus(dv)));
+    });
+    await withPhase("notify", () => status.startNotifications());
+
+    log.info("connect complete");
+    this.emitConnection("connected");
+  }
+
+  private handleConnectError(err: unknown) {
+    if (err instanceof BleConnectError) {
+      log.error(`connect failed at "${err.phase}": ${err.cause.name}`, err.cause);
+    } else {
+      log.error("connect failed", err as Error);
+    }
+    this.emitConnection("disconnected");
   }
 
   async disconnect(): Promise<void> {
     this.server?.disconnect();
     this.server = null;
+    this.device = null;
+    this.telemetryChar = null;
+    this.configChar = null;
+    this.commandChar = null;
     this.emitConnection("disconnected");
   }
 
@@ -181,6 +265,12 @@ export class AirGloveClient implements IAirGloveClient {
   async sendCommand(opcode: Command): Promise<void> {
     if (!this.commandChar) throw new Error("Not connected.");
     await this.commandChar.writeValue(new Uint8Array([opcode]));
+  }
+
+  async readTelemetry(): Promise<AgTelemetry> {
+    if (!this.telemetryChar) throw new Error("Not connected.");
+    const dv = await this.telemetryChar.readValue();
+    return decodeTelemetry(dv);
   }
 
   async readDeviceInfo(): Promise<DeviceInfo> {

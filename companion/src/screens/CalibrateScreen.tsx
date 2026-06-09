@@ -1,39 +1,32 @@
 import { Command, StatusState } from "../ble/types";
 import { Row, Section } from "../ui/Section";
-import { Screen } from "../ui/Screen";
 import { StatBox, StatGrid } from "../ui/StatBox";
-import { EmptyState } from "../ui/EmptyState";
+import { WorkScreen } from "../ui/WorkScreen";
 import { store, useAppState } from "../state/store";
 
+const CAPTION =
+  "Inspect live IMU readings and calibrate gyro bias or touch baselines.";
+
 export function CalibrateScreen() {
+  return (
+    <WorkScreen title="Calibrate" caption={CAPTION}>
+      <CalibrateBody />
+    </WorkScreen>
+  );
+}
+
+function CalibrateBody() {
   const s = useAppState();
-  const connected = s.status === "connected";
   const t = s.telemetry;
   const st = s.lastStatus;
   const running = st?.state === StatusState.Running;
 
-  if (!connected) {
-    return (
-      <Screen title="Calibrate">
-        <EmptyState
-          title="Not connected"
-          action={
-            <button
-              className="btn btn-primary"
-              disabled={s.status === "connecting"}
-              onClick={() => void store.connect()}
-            >
-              Connect
-            </button>
-          }
-        />
-      </Screen>
-    );
-  }
-
   return (
-    <Screen title="Calibrate">
-      <Section title="IMU — live">
+    <>
+      <Section
+        title="IMU — live"
+        action={<span className="hz-badge">{s.telemetryHz} Hz</span>}
+      >
         <StatGrid>
           <StatBox label="ACCEL X" value={g(t?.accel[0])} />
           <StatBox label="ACCEL Y" value={g(t?.accel[1])} />
@@ -80,7 +73,7 @@ export function CalibrateScreen() {
           </button>
         </div>
       </Section>
-    </Screen>
+    </>
   );
 }
 

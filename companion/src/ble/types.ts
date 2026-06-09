@@ -75,11 +75,20 @@ export enum Command {
   RecalibrateTouch = 0x02,
   SaveConfig = 0x03,
   FactoryReset = 0x04,
+  Sleep = 0x05,
+  Wake = 0x06,
+  /** Telemetry rate hints — companion sends one based on which tab is
+   *  active so firmware only spends BLE airtime on what's actually
+   *  being watched. */
+  TelemetryIdle = 0x07,    // ~2 Hz   — Home / About
+  TelemetryNormal = 0x08,  // ~10 Hz  — Tune (touch bars)
+  TelemetryFast = 0x09,    // ~30 Hz  — Calibrate (live IMU)
 }
 
 export const CONFIG_FLAG_DIRTY = 0x01;
 export const TELEMETRY_FLAG_HID_CONNECTED = 0x01;
 export const TELEMETRY_FLAG_CALIBRATING = 0x02;
+export const TELEMETRY_FLAG_SLEEPING = 0x04;
 
 export interface DeviceInfo {
   manufacturer: string;
@@ -89,13 +98,43 @@ export interface DeviceInfo {
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
+/** Lightweight identity for a previously-granted device (Web Bluetooth
+ *  `getDevices()`). The UI uses this to surface a one-click "Reconnect"
+ *  affordance instead of forcing the user back through the chooser. */
+export interface KnownDevice {
+  id: string;
+  name: string;
+}
+
 export interface IAirGloveClient {
   readonly kind: "real" | "mock";
+  /** The device currently held in hand — populated the moment a pick or
+   *  reconnect succeeds, cleared on disconnect. Lets callers paint the
+   *  device's advertised name immediately, without waiting for a round
+   *  trip to read the GATT Device Info characteristics. */
+  readonly currentDevice: KnownDevice | null;
   connect(): Promise<void>;
+  /** Connect to a previously-permitted device without showing the chooser.
+   *  Pass an id from listKnownDevices(); if omitted, picks the first match. */
+  reconnect(id?: string): Promise<void>;
+  /** Devices this origin has already been granted permission to. Empty if
+   *  the browser doesn't implement getDevices() (Safari/Firefox today). */
+  listKnownDevices(): Promise<KnownDevice[]>;
+  /** Revoke the origin's permission for the given device. After this, the
+   *  device disappears from listKnownDevices() and the user must go through
+   *  the chooser again to reconnect. Forgetting an active link also
+   *  disconnects it. Pass an id to target a specific device, or omit to
+   *  forget the first remembered one. */
+  forget(id?: string): Promise<void>;
   disconnect(): Promise<void>;
   readConfig(): Promise<AgConfig>;
   writeConfig(cfg: AgConfig): Promise<void>;
   sendCommand(opcode: Command): Promise<void>;
+  /** Force-read the telemetry characteristic over GATT, bypassing the
+   *  notification stream. Use when local state and firmware state may
+   *  have drifted (e.g. after a sleep/wake command) and we want the
+   *  ground truth without waiting for the next 5 Hz notify. */
+  readTelemetry(): Promise<AgTelemetry>;
   readDeviceInfo(): Promise<DeviceInfo>;
   readBattery(): Promise<number>;
   onConnectionChange(cb: (s: ConnectionStatus) => void): void;

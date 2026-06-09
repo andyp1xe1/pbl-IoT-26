@@ -7,11 +7,12 @@ import {
   PAD_NAMES,
 } from "../ble/types";
 import { Row, Section } from "../ui/Section";
-import { Screen } from "../ui/Screen";
 import { Slider } from "../ui/Slider";
 import { TouchBar } from "../ui/TouchBar";
-import { EmptyState } from "../ui/EmptyState";
+import { WorkScreen } from "../ui/WorkScreen";
 import { store, useAppState } from "../state/store";
+
+const CAPTION = "Adjust sensitivity, touch thresholds, and click mappings.";
 
 const PRIMARY_OPTIONS: ClickAction[] = [
   ClickAction.None,
@@ -29,29 +30,17 @@ const ALT_OPTIONS: ClickAction[] = PRIMARY_OPTIONS.filter(
 );
 
 export function TuneScreen() {
+  return (
+    <WorkScreen title="Tune" caption={CAPTION} gridClass="tune-layout">
+      <TuneBody />
+    </WorkScreen>
+  );
+}
+
+function TuneBody() {
   const s = useAppState();
   const cfg = s.config;
-  const connected = s.status === "connected";
   const dirty = s.configDirtyLocal || (cfg.flags & CONFIG_FLAG_DIRTY) !== 0;
-
-  if (!connected) {
-    return (
-      <Screen title="Tune">
-        <EmptyState
-          title="Not connected"
-          action={
-            <button
-              className="btn btn-primary"
-              disabled={s.status === "connecting"}
-              onClick={() => void store.connect()}
-            >
-              Connect
-            </button>
-          }
-        />
-      </Screen>
-    );
-  }
 
   // Non-modifier pad indices, in the order their alt slot is stored.
   const altPads =
@@ -60,8 +49,8 @@ export function TuneScreen() {
       : [0, 1, 2, 3].filter((p) => p !== cfg.modifierPad);
 
   return (
-    <Screen title="Tune">
-      <Section title="Pointer">
+    <>
+      <Section title="Pointer" className="tune-pointer">
         <Slider
           label="Sensitivity X"
           min={200}
@@ -91,7 +80,7 @@ export function TuneScreen() {
         />
       </Section>
 
-      <Section title="Fusion & input">
+      <Section title="Fusion & input" className="tune-fusion">
         <Slider
           label="Madgwick β"
           min={0}
@@ -112,32 +101,43 @@ export function TuneScreen() {
         />
       </Section>
 
-      <Section title="Touch — live & thresholds">
+      <Section title="Touch — live & thresholds" className="tune-touch">
         {PAD_NAMES.map((name, i) => {
           const live = s.telemetry?.touch[i] ?? 0;
           const thresh = cfg.touchThreshold[i];
           return (
             <div key={name} className="touch-tune">
-              <TouchBar label={name} value={live} threshold={thresh} />
-              <Slider
-                label=""
-                min={1}
+              <TouchBar
+                label={name}
+                value={live}
+                threshold={thresh}
                 max={4095}
-                step={10}
-                value={thresh}
-                display={`${thresh}`}
-                onChange={(v) => {
-                  const arr = [...cfg.touchThreshold] as typeof cfg.touchThreshold;
-                  arr[i] = v;
-                  store.updateConfigLocal({ touchThreshold: arr });
-                }}
+                invert
               />
+              <div className="touch-tune-thresh">
+                <span className="touch-tune-thresh-label">Threshold</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={4095}
+                  step={10}
+                  value={thresh}
+                  onChange={(e) => {
+                    const arr = [
+                      ...cfg.touchThreshold,
+                    ] as typeof cfg.touchThreshold;
+                    arr[i] = Number(e.target.value);
+                    store.updateConfigLocal({ touchThreshold: arr });
+                  }}
+                />
+                <span className="touch-tune-thresh-value">{thresh}</span>
+              </div>
             </div>
           );
         })}
       </Section>
 
-      <Section title="Click mapping">
+      <Section title="Click mapping" className="tune-click">
         {PAD_NAMES.map((name, i) => (
           <Row
             key={name}
@@ -205,7 +205,7 @@ export function TuneScreen() {
           </button>
         </div>
       </Section>
-    </Screen>
+    </>
   );
 }
 

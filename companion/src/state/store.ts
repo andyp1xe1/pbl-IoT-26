@@ -4,6 +4,12 @@ import {
   BleConnectError,
   isWebBluetoothAvailable,
 } from "../ble/client";
+import { DemoAirGloveClient } from "../ble/demo-client";
+
+/** Build-time switch flipped by `npm run demo` (sets VITE_DEMO=1) so a
+ *  designer can drive the full UI without a glove or a Web-Bluetooth host. */
+const DEMO_MODE =
+  (import.meta.env as { VITE_DEMO?: string }).VITE_DEMO === "1";
 import {
   AgConfig,
   AgStatus,
@@ -12,6 +18,7 @@ import {
   ConnectionStatus,
   DeviceInfo,
   IAirGloveClient,
+  KnownDevice,
   defaultConfig,
 } from "../ble/types";
 import type { TabId } from "../ui/TabBar";
@@ -23,38 +30,114 @@ export interface AppState {
   config: AgConfig;
   configDirtyLocal: boolean;
   telemetry: AgTelemetry | null;
+  /** Measured rate at which telemetry notifications are arriving at the UI,
+   *  in Hz. Rolling 1-second window. Zero when disconnected or no traffic.
+   *  Diagnostic — surface on Calibrate so the user can sanity-check that
+   *  the firmware's TELE_FAST (60 Hz target) actually reaches the browser. */
+  telemetryHz: number;
   lastStatus: AgStatus | null;
   deviceInfo: DeviceInfo | null;
+  /** Remembered devices the browser will let us reconnect to silently
+   *  (Web Bluetooth `getDevices()`). Empty on Safari/Firefox. */
+  knownDevices: KnownDevice[];
   tab: TabId;
 }
 
 class Store {
   private state: AppState = {
-    webBluetoothAvailable: isWebBluetoothAvailable(),
+    webBluetoothAvailable: DEMO_MODE || isWebBluetoothAvailable(),
     status: "disconnected",
     error: null,
     config: defaultConfig(),
     configDirtyLocal: false,
     telemetry: null,
+    telemetryHz: 0,
     lastStatus: null,
     deviceInfo: null,
-    tab: "connect",
+    knownDevices: [],
+    tab: "device",
   };
 
   private client: IAirGloveClient = this.makeClient();
   private listeners = new Set<() => void>();
 
+  constructor() {
+    // Surface previously-permitted devices so the Connect screen can show a
+    // "Reconnect <name>" affordance without opening the chooser. Fire and
+    // forget — browsers without getDevices() simply yield [].
+    void this.refreshKnownDevices();
+  }
+
   private makeClient(): IAirGloveClient {
-    const client = new AirGloveClient();
+    const client: IAirGloveClient = DEMO_MODE
+      ? new DemoAirGloveClient()
+      : new AirGloveClient();
     client.onConnectionChange((s) => {
-      this.patch({ status: s });
-      if (s === "connected") void this.refreshAfterConnect();
-      if (s === "disconnected")
-        this.patch({ telemetry: null, deviceInfo: null });
+      if (s === "connected") {
+        // Pull the device identity off the client *synchronously* with the
+        // status flip so the next render already has a name to show. Without
+        // this, knownDevices stays empty until refreshKnownDevices() (an
+        // async getDevices() call) completes a few ms later, causing the
+        // Device title to flash a generic placeholder.
+        const d = client.currentDevice;
+        this.patch({
+          status: s,
+          knownDevices: d ? [d] : this.state.knownDevices,
+        });
+        void this.refreshAfterConnect();
+      } else if (s === "disconnected") {
+        this.disarmTelemetryWatchdog();
+        this.notifyTimes.length = 0;
+        this.patch({ status: s, telemetry: null, telemetryHz: 0, deviceInfo: null });
+      } else {
+        this.patch({ status: s });
+      }
     });
-    client.onTelemetry((t) => this.patch({ telemetry: t }));
+    client.onTelemetry((t) => {
+      // Rolling 1-second window: arrival count = Hz. Cheap (push + shift),
+      // good enough resolution for a diagnostic readout that refreshes
+      // every notify anyway.
+      const now = performance.now();
+      this.notifyTimes.push(now);
+      while (this.notifyTimes.length && now - this.notifyTimes[0] > 1000) {
+        this.notifyTimes.shift();
+      }
+      this.patch({ telemetry: t, telemetryHz: this.notifyTimes.length });
+      this.armTelemetryWatchdog();
+    });
     client.onStatus((st) => this.patch({ lastStatus: st }));
     return client;
+  }
+
+  /* ── Telemetry watchdog ────────────────────────────────────────────────
+   * The notify stream is the ground truth for live sensor state — it fires
+   * at ~5 Hz while the device is awake AND while it's sleeping (the
+   * sleeping frame just has TFLAG_SLEEPING set). If frames stop arriving
+   * for more than ~2.5 s while we still think we're connected, something
+   * is off: subscription dropped, BLE link in a half-state, or firmware
+   * stuck in a state we don't know about. Doing a one-shot readTelemetry()
+   * forces a GATT read that returns the current value and (on a healthy
+   * link) re-opens the dialogue. Only fired *lazily*, when the data
+   * actually goes quiet — no eager polling. */
+  private telemetryWatchdog: ReturnType<typeof setTimeout> | null = null;
+  private notifyTimes: number[] = [];
+
+  private armTelemetryWatchdog() {
+    this.disarmTelemetryWatchdog();
+    // Generous enough to ride out the IDLE-tab 500 ms period plus a few
+    // skipped frames (BLE conn-event jitter) without false-firing. At
+    // FAST and NORMAL rates we'll only ever rearm this from the first
+    // notify of the interval, so the budget is plenty.
+    this.telemetryWatchdog = setTimeout(() => {
+      if (this.state.status === "connected") void this.refreshState();
+    }, 3500);
+  }
+
+  private disarmTelemetryWatchdog() {
+    if (this.telemetryWatchdog) {
+      clearTimeout(this.telemetryWatchdog);
+      this.telemetryWatchdog = null;
+    }
   }
 
   getState = (): AppState => this.state;
@@ -75,17 +158,81 @@ class Store {
 
   async connect() {
     // Anything that prevents the user from completing a connect here belongs
-    // on the Connect tab where there's a full error/retry surface. Either
+    // on the Device tab where there's a full error/retry surface. Either
     // case below routes them there.
     if (!this.state.webBluetoothAvailable) {
-      this.patch({ tab: "connect" });
+      this.patch({ tab: "device" });
       return;
     }
     this.patch({ error: null });
     try {
       await this.client.connect();
+      void this.refreshKnownDevices();
     } catch (err) {
-      this.patch({ error: errorMessage(err), tab: "connect" });
+      this.patch({ error: errorMessage(err), tab: "device" });
+    }
+  }
+
+  /** Skip the chooser and link to a remembered device. If reconnect fails
+   *  (device out of range, browser permission revoked, …) we fall back to
+   *  the chooser so the user can pair again. */
+  async reconnect(id?: string) {
+    if (!this.state.webBluetoothAvailable) return;
+    this.patch({ error: null });
+    try {
+      await this.client.reconnect(id);
+    } catch (err) {
+      // Common case: BleConnectError "link"/NetworkError — device is asleep
+      // or out of range. Surface a short hint; don't auto-open the chooser
+      // since that would surprise the user mid-click.
+      this.patch({ error: errorMessage(err), tab: "device" });
+    }
+  }
+
+  /** Wipe everything we know about the device — both the BLE-stack
+   *  permission and the in-memory snapshot. After this the screen is in
+   *  the same shape as a fresh first-run: switches off, info card
+   *  skeletons, title falls back to the generic "Air Glove". The user
+   *  has to flip the Connection switch (which opens the chooser) to
+   *  pair again, exactly as if they'd never paired before.
+   *
+   *  Order matters: disconnect first so any in-flight telemetry stops
+   *  arriving and the disconnect handler runs cleanly, *then* revoke
+   *  the permission, *then* explicitly null the snapshot fields the
+   *  disconnect handler doesn't touch (lastStatus, error, config).
+   *  Calling forget() on an already-disconnected device is a no-op on
+   *  the GATT side, which is what we want. */
+  async forget(id?: string) {
+    try {
+      await this.client.disconnect();
+    } catch {
+      /* tearing down — ignore */
+    }
+    try {
+      await this.client.forget(id);
+    } catch (err) {
+      this.patch({ error: errorMessage(err) });
+    }
+    this.patch({
+      status: "disconnected",
+      telemetry: null,
+      deviceInfo: null,
+      lastStatus: null,
+      error: null,
+      knownDevices: [],
+      configDirtyLocal: false,
+    });
+    // Refresh from the browser in case forget() was a no-op (older Chromium)
+    // — the list will then reflect what's truly remembered.
+    void this.refreshKnownDevices();
+  }
+
+  async refreshKnownDevices() {
+    try {
+      const knownDevices = await this.client.listKnownDevices();
+      this.patch({ knownDevices });
+    } catch {
+      // Non-fatal: getDevices() may be gated or unimplemented.
     }
   }
 
@@ -94,15 +241,28 @@ class Store {
   }
 
   private async refreshAfterConnect() {
+    // Sequence the GATT reads — running them in parallel races with the
+    // notification setup that just finished in attach() and on some
+    // Chromium / BlueZ combos quietly stalls the telemetry subscription
+    // afterward. One at a time, patching as each lands so the UI fills
+    // in progressively.
     try {
-      const [config, deviceInfo] = await Promise.all([
-        this.client.readConfig(),
-        this.client.readDeviceInfo(),
-      ]);
-      this.patch({ config, deviceInfo, configDirtyLocal: false });
+      const config = await this.client.readConfig();
+      this.patch({ config, configDirtyLocal: false });
     } catch (err) {
       this.patch({ error: errorMessage(err) });
     }
+    try {
+      const deviceInfo = await this.client.readDeviceInfo();
+      this.patch({ deviceInfo });
+    } catch (err) {
+      this.patch({ error: errorMessage(err) });
+    }
+    // Live telemetry arrives via the notify subscription set up in attach().
+    // The watchdog below catches the case where it silently stops flowing
+    // (e.g. the device entered sleep without us asking) and only THEN
+    // does a one-shot read to learn the truth.
+    this.armTelemetryWatchdog();
   }
 
   updateConfigLocal(patch: Partial<AgConfig>) {
@@ -136,6 +296,50 @@ class Store {
   async sendCommand(opcode: Command) {
     try {
       await this.client.sendCommand(opcode);
+    } catch (err) {
+      this.patch({ error: errorMessage(err) });
+    }
+  }
+
+  /** Put the device into soft-sleep. Firmware powers the MPU down + stops
+   *  emitting HID reports; the BLE link stays up so the next telemetry
+   *  frame carries the SLEEPING flag and the Power switch flips. We do
+   *  not eager-read the state here — the notify stream is faster than a
+   *  GATT read and chaining a read on the heels of a write has been
+   *  shown to disrupt the subscription on some Chromium / BlueZ pairs.
+   *  The watchdog will catch the case where notifications go quiet. */
+  sleep() {
+    return this.sendCommand(Command.Sleep);
+  }
+
+  wake() {
+    return this.sendCommand(Command.Wake);
+  }
+
+  /** Hint the firmware which telemetry rate to publish at — sent on tab
+   *  changes so each screen gets a stream sized to what it actually
+   *  shows. Idempotent: re-sending the same rate is a no-op on firmware.
+   *  Silent no-op when not connected. */
+  setTelemetryRate(rate: "idle" | "normal" | "fast") {
+    if (this.state.status !== "connected") return;
+    const op =
+      rate === "fast"   ? Command.TelemetryFast :
+      rate === "normal" ? Command.TelemetryNormal :
+                          Command.TelemetryIdle;
+    return this.sendCommand(op);
+  }
+
+  /** Read the telemetry characteristic on demand so the app state can be
+   *  reconciled with what the firmware *actually* reports — useful when
+   *  the notify stream falls behind a command (sleep/wake transition) or
+   *  if subscriptions silently drop. Optional delay lets the firmware
+   *  finish a transition (e.g. the 35 ms MPU wake settle) before we read. */
+  async refreshState(delayMs = 0) {
+    if (this.state.status !== "connected") return;
+    if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+    try {
+      const telemetry = await this.client.readTelemetry();
+      this.patch({ telemetry });
     } catch (err) {
       this.patch({ error: errorMessage(err) });
     }
