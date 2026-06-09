@@ -3,7 +3,7 @@
  * Algorithm (per docs/plans/06-srv-motion.md):
  *   1. delta = q_prev^-1 * q_curr  (conjugate for unit quaternion).
  *   2. Small-angle rotation vector ≈ 2 * delta.vec.
- *   3. Axis mapping: pitch (around Y) → dx, roll (around X) → dy.
+ *   3. Axis mapping: pitch+yaw (around Y, Z) → dx, roll (around X) → dy.
  *   4. Per-axis dead-zone on |theta|.
  *   5. Gain curve:  mag = gain_low * |theta| + |theta|^gain_exp, sign from theta.
  *   6. Velocity cap, then clamp to int8.
@@ -21,10 +21,13 @@ static motion_config_t s_cfg = {
     /* gain_low     */ 400.0f,
     /* gain_exp     */ 1.6f,
     /* velocity_cap */ 127.0f,
+    /* gain_y_scale */ 1.0f,
 };
 static quat_t s_q_prev   = { 1.0f, 0.0f, 0.0f, 0.0f };
 static bool   s_has_prev = false;
 static bool   s_clutch   = false;
+static float  s_dx_ema   = 0.0f;
+static float  s_dy_ema   = 0.0f;
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -35,6 +38,7 @@ static bool cfg_is_valid(const motion_config_t *cfg)
     if (!isfinite(cfg->gain_low)     || cfg->gain_low     <= 0.0f) return false;
     if (!isfinite(cfg->gain_exp)     || cfg->gain_exp     <  1.0f) return false;
     if (!isfinite(cfg->velocity_cap) || cfg->velocity_cap <= 0.0f) return false;
+    if (!isfinite(cfg->gain_y_scale) || cfg->gain_y_scale <= 0.0f) return false;
     return true;
 }
 
@@ -65,6 +69,8 @@ extern "C" ag_result_t srv_motion_init(const motion_config_t *cfg)
     s_cfg      = *cfg;
     s_has_prev = false;
     s_clutch   = false;
+    s_dx_ema   = 0.0f;
+    s_dy_ema   = 0.0f;
     return AG_OK;
 }
 
@@ -77,6 +83,8 @@ extern "C" void srv_motion_reset(void)
 {
     s_has_prev = false;
     s_clutch   = false;
+    s_dx_ema   = 0.0f;
+    s_dy_ema   = 0.0f;
 }
 
 extern "C" ag_result_t srv_motion_update(const quat_t *q, float dt_s,
@@ -116,29 +124,59 @@ extern "C" ag_result_t srv_motion_update(const quat_t *q, float dt_s,
     const float p3 = -s_q_prev.q3;
     const float c0 = q->q0, c1 = q->q1, c2 = q->q2, c3 = q->q3;
 
-    /* Hamilton product — vector part only (scalar and q_k unused). */
+    /* Hamilton product — full vector part (all three axes used). */
     const float d1 = p0*c1 + p1*c0 + p2*c3 - p3*c2;
     const float d2 = p0*c2 - p1*c3 + p2*c0 + p3*c1;
+    const float d3 = p0*c3 + p1*c2 - p2*c1 + p3*c0;
 
     /* Small-angle rotation-vector approximation: 2 * delta.vec. */
     const float dtheta_x = 2.0f * d1;   /* around X axis — roll  */
     const float dtheta_y = 2.0f * d2;   /* around Y axis — pitch */
+    const float dtheta_z = 2.0f * d3;   /* around Z axis — yaw   */
 
-    /* Axis mapping (Phase I; sign flips deferred to bring-up):
-     *   pitch (dtheta_y) → cursor dx
-     *   roll  (dtheta_x) → cursor dy */
-    float theta_for_x = dtheta_y;
-    float theta_for_y = dtheta_x;
+    /* Axis mapping:
+     *   pitch − yaw (dtheta_y − dtheta_z) → cursor dx
+     *       Pitch (forward/back tilt) and yaw (rotate hand left/right) both
+     *       feel like "horizontal" pointing motions to the user — combine
+     *       them so either gesture moves the cursor sideways. Yaw is mirrored
+     *       so it agrees with pitch on which direction is "right".
+     *   roll (dtheta_x) → cursor dy (tilt left/right = up/down, negated)
+     * Negating dy so that tilting the hand down moves the cursor down,
+     * matching the natural hand orientation on the desk. */
+    float theta_for_x =  dtheta_y - dtheta_z;
+    float theta_for_y = -dtheta_x;
 
-    /* Per-axis dead-zone. */
-    if (fabsf(theta_for_x) < s_cfg.deadzone_rad) theta_for_x = 0.0f;
-    if (fabsf(theta_for_y) < s_cfg.deadzone_rad) theta_for_y = 0.0f;
+    /* Radial (circular) dead-zone — applied to the 2-D magnitude, not
+     * per-axis independently. A square per-axis dead-zone kills diagonal
+     * movement because both components can sit below the threshold even
+     * when the total motion is significant. The circular version treats
+     * all directions equally, and the (r - dz)/r rescale keeps the
+     * transition smooth (no sudden jump from zero to nonzero). */
+    const float r = sqrtf(theta_for_x * theta_for_x +
+                          theta_for_y * theta_for_y);
+    if (r < s_cfg.deadzone_rad) {
+        theta_for_x = 0.0f;
+        theta_for_y = 0.0f;
+    } else {
+        const float scale = (r - s_cfg.deadzone_rad) / r;
+        theta_for_x *= scale;
+        theta_for_y *= scale;
+    }
 
     const float out_x = apply_gain(theta_for_x, &s_cfg);
-    const float out_y = apply_gain(theta_for_y, &s_cfg);
+    const float out_y = apply_gain(theta_for_y, &s_cfg) * s_cfg.gain_y_scale;
 
-    *dx = clamp_to_int8(out_x);
-    *dy = clamp_to_int8(out_y);
+    /* EMA on the float output before int8 quantisation.
+     * Prevents single-pixel jitter when the motion is near an integer
+     * boundary. alpha=0.22 → time constant ≈ 40 ms at 100 Hz — smooth
+     * without being sluggish. Previous value (0.45, τ≈17 ms) was too short
+     * to suppress jitter near quantisation boundaries. */
+    static constexpr float kEma = 0.22f;
+    s_dx_ema = kEma * out_x + (1.0f - kEma) * s_dx_ema;
+    s_dy_ema = kEma * out_y + (1.0f - kEma) * s_dy_ema;
+
+    *dx = clamp_to_int8(s_dx_ema);
+    *dy = clamp_to_int8(s_dy_ema);
 
     s_q_prev = *q;
     return AG_OK;

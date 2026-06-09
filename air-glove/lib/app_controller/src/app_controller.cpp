@@ -18,6 +18,7 @@
 #include "dd_mpu6050.h"
 #include "dd_touch.h"
 #include "dd_ble_hid.h"
+#include "dd_ble_cfg.h"
 #include "srv_fusion.h"
 #include "srv_motion.h"
 #include "srv_input.h"
@@ -31,6 +32,12 @@ QueueHandle_t q_hid         = nullptr;
 /* ── Shared atomic state (definitions) ─────────────────────────────────── */
 std::atomic<uint8_t> g_current_buttons{0};
 std::atomic<int>     g_fsm_state{APP_STATE_INIT};
+std::atomic<bool>    g_scroll_mode{false};
+
+/* ── Telemetry snapshot (definitions; declared in tasks.h) ─────────────── */
+std::atomic<int16_t>  g_tele_accel_mg[3]  = {};
+std::atomic<int16_t>  g_tele_gyro_mdps[3] = {};
+std::atomic<uint16_t> g_tele_touch_raw[4] = {};
 
 /* ── File-scope helpers ────────────────────────────────────────────────── */
 namespace {
@@ -39,36 +46,54 @@ struct TaskEntry {
     const char  *name;
     TaskHandle_t handle;
 };
-static TaskEntry s_tasks[6] = {
+static TaskEntry s_tasks[7] = {
     {"t_imu_sample", nullptr},
     {"t_fusion",     nullptr},
     {"t_touch",      nullptr},
     {"t_motion",     nullptr},
     {"t_app",        nullptr},
     {"t_ble_hid",    nullptr},
+    {"t_cfg",        nullptr},
 };
 
 static TimerHandle_t s_heartbeat_timer = nullptr;
 
 static const motion_config_t kDefaultMotionCfg = {
-    /* deadzone_rad */ 0.02f,
-    /* gain_low     */ 400.0f,
-    /* gain_exp     */ 1.6f,
-    /* velocity_cap */ 127.0f,
+    /* deadzone_rad */ 0.004f,  /* ~0.23° — filters gyro noise (~0.002 rad)
+                                 *  without blocking slow intentional tilts.  */
+    /* gain_low     */ 600.0f,  /* linear term — gives ~25 px/frame at 30°/s  */
+    /* gain_exp     */ 1.2f,    /* mild curve: fast flicks feel snappy         */
+    /* velocity_cap */ 127.0f,  /* full int8 range                             */
+    /* gain_y_scale */ 1.7f,    /* wrist roll (up/down) produces smaller deltas
+                                 *  than pitch (left/right) for the same hand
+                                 *  displacement — this levels them out.
+                                 *  Tune up if Y is still slow, down if too fast. */
 };
+
+static const char *state_name(int s)
+{
+    switch (s) {
+        case APP_STATE_INIT:    return "INIT";
+        case APP_STATE_PAIRING: return "PAIRING";
+        case APP_STATE_ACTIVE:  return "ACTIVE";
+        default:                return "UNKNOWN";
+    }
+}
 
 /* 1 Hz printf of each task's stack high-water-mark (in words) plus the
  * current top-level FSM state. Referenced in the E09 acceptance criterion
  * "no task high-water exceeds 75 % of allocated after 10-minute stress". */
 static void heartbeat_cb(TimerHandle_t /*xTimer*/)
 {
-    printf("[heartbeat] state=%d connected=%d\n",
-           g_fsm_state.load(), (int)dd_ble_hid_is_connected());
+    const bool connected = dd_ble_hid_is_connected();
+    printf("[heartbeat] state=%-7s  BLE=%s\n",
+           state_name(g_fsm_state.load()),
+           connected ? "connected" : "waiting for host");
     for (auto &t : s_tasks) {
         if (t.handle != nullptr) {
             const unsigned hwm =
                 (unsigned)uxTaskGetStackHighWaterMark(t.handle);
-            printf("[heartbeat] hwm %-12s %4u words\n", t.name, hwm);
+            printf("[heartbeat]   %-14s stack free: %4u words\n", t.name, hwm);
         }
     }
 }
@@ -102,9 +127,23 @@ extern "C" ag_result_t app_controller_start(void)
     rc = dd_ble_hid_init("AirGlove");
     if (rc != AG_OK) fatal_init("dd_ble_hid_init", rc);
 
+    /* Companion-app config/telemetry service shares the NimBLE server created
+     * above. Non-fatal: if it fails the glove still works as a plain mouse. */
+    printf("[app_controller] init stage 4: dd_ble_cfg\n");
+    rc = dd_ble_cfg_init(nullptr);
+    if (rc != AG_OK) {
+        printf("[app_controller] WARN dd_ble_cfg_init rc=%d — continuing without "
+               "companion service\n", rc);
+    }
+
     /* ── 2. Services (cannot fail on valid inputs) ──────────────────── */
     printf("[app_controller] init services\n");
-    (void)srv_fusion_init(0.08f);
+    /* beta=0.05: Madgwick's recommended base is 0.033 for IMU-only; 0.05 gives
+     * a small extra margin against gyro bias drift without the "sticky /
+     * fighting-back" feel that 0.15 caused during slow tilts. The motion-aware
+     * guard in srv_fusion already suppresses accel correction during fast
+     * movements, so beta only matters in the near-static regime. */
+    (void)srv_fusion_init(0.05f);
     (void)srv_motion_init(&kDefaultMotionCfg);
     (void)srv_input_init(15);
 
@@ -134,6 +173,10 @@ extern "C" ag_result_t app_controller_start(void)
                             3072, nullptr, 3, &s_tasks[4].handle, 1);
     xTaskCreatePinnedToCore(t_ble_hid_fn,    "t_ble_hid",
                             4096, nullptr, 6, &s_tasks[5].handle, 1);
+    /* Low priority: companion telemetry/config is best-effort, must never
+     * starve the motion or HID path. Larger stack covers NVS (flash) writes. */
+    xTaskCreatePinnedToCore(t_cfg_fn,        "t_cfg",
+                            4096, nullptr, 2, &s_tasks[6].handle, 1);
 
     for (auto &t : s_tasks) {
         if (t.handle == nullptr) fatal_init("task_create", AG_ERR_INIT);

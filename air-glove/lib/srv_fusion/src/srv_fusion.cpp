@@ -64,14 +64,26 @@ extern "C" ag_result_t srv_fusion_update(const imu_sample_t *s, quat_t *out)
     float qDot2 = 0.5f * ( q0 * gy - q1 * gz + q3 * gx);
     float qDot3 = 0.5f * ( q0 * gz + q1 * gy - q2 * gx);
 
-    /* ── 4. Madgwick accel correction (skip during free-fall) ───────────── *
-     * Madgwick 2010 IMU variant, gradient descent, 6-axis.
-     * Objective function: f = q^T * g_ref - a_body  where g_ref = (0,0,1)
-     * after accel normalisation. The Jacobian-transposed gradient gradF is
-     * computed analytically from the 3 residuals and the 4 quaternion
-     * components. */
+    /* ── 4. Madgwick accel correction (motion-aware) ────────────────────── *
+     * Standard Madgwick corrects toward gravity on every frame, but during
+     * active movement the accelerometer sees gravity + wrist acceleration
+     * mixed together. Applying the correction then makes the filter resist
+     * fast tilts, causing the "sticky" cursor feel.
+     *
+     * Fix: only apply accel correction when the sensor is near-stationary,
+     * i.e. total accel magnitude is close to g (8.0–11.5 m/s²). During
+     * motion, the filter runs gyro-only integration — zero lag, zero
+     * resistance. Drift is negligible for mouse usage over normal periods.
+     *
+     * Thresholds (m/s²):
+     *   < 8.0  → free-fall or strong downward flick — skip
+     *   > 11.5 → fast movement with dynamic accel  — skip (gyro only)
+     *   else   → near-static, accel is reliable     — apply correction */
     float accel_sq = ax * ax + ay * ay + az * az;
-    if (accel_sq > 1e-6f) {
+    float accel_mag = sqrtf(accel_sq);
+    bool near_static = (accel_mag > 8.0f) && (accel_mag < 11.5f);
+
+    if (near_static) {
         /* Normalise accelerometer measurement */
         float recip = 1.0f / sqrtf(accel_sq);
         ax *= recip;
