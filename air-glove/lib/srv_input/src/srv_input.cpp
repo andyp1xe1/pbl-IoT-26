@@ -31,6 +31,12 @@ static uint64_t    s_last_press_t_us[TOUCH_PAD_COUNT];
 /* Default debounce = 15 ms → 2 ticks at the assumed 10 ms sample period. */
 static uint16_t    s_debounce_ticks = 2;
 
+/* Per-pad raw-count thresholds. A pad reads as "touched" when sample.raw[i]
+ * < s_threshold[i]. Defaults are chosen so the cap pad (thumb) trips at the
+ * same level as the old dd_touch internal threshold; buttons (which dd_touch
+ * normalises to 0 = pressed / 4095 = open) trip with any value < 600. */
+static uint16_t    s_threshold[TOUCH_PAD_COUNT] = {600, 600, 600, 600};
+
 /* Chord window (future E10). Kept as static data so callers do not pay
  * for it until a chord API is introduced in Phase II. */
 static const uint16_t kChordWindowTicks __attribute__((unused)) = 3; /* 30 ms */
@@ -77,6 +83,21 @@ extern "C" void srv_input_reset(void)
     clear_state_all();
 }
 
+extern "C" void srv_input_set_thresholds(const uint16_t thresh[TOUCH_PAD_COUNT])
+{
+    if (thresh == NULL) return;
+    for (size_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
+        s_threshold[i] = thresh[i];
+    }
+}
+
+extern "C" void srv_input_set_debounce_ms(uint16_t ms)
+{
+    uint32_t ticks = ((uint32_t)ms + 9u) / 10u;
+    if (ticks < 1u) ticks = 1u;
+    s_debounce_ticks = (uint16_t)ticks;
+}
+
 extern "C" ag_result_t srv_input_process(const touch_sample_t *s,
                                          input_event_t *out,
                                          size_t out_cap,
@@ -87,7 +108,12 @@ extern "C" ag_result_t srv_input_process(const touch_sample_t *s,
     *out_len = 0;
 
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
-        const bool raw_high = (s->touched_mask & (uint8_t)(1u << i)) != 0;
+        /* Per-pad threshold owned by srv_input — replaces dd_touch's
+         * touched_mask so the companion app can re-tune thresholds at
+         * runtime without touching the driver. A threshold of 0 disables
+         * the pad entirely. */
+        const bool raw_high = (s_threshold[i] != 0)
+                              && (s->raw[i] < s_threshold[i]);
 
         switch (s_state[i]) {
         case PAD_IDLE:

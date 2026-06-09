@@ -54,8 +54,18 @@ ag_result_t srv_input_process(const touch_sample_t *s,
                               size_t *out_len);
 
 /* Force every pad FSM back to IDLE and clear chord state. Config
- * (debounce ticks) is preserved. */
+ * (debounce ticks, thresholds) is preserved. */
 void srv_input_reset(void);
+
+/* Update per-pad raw-count thresholds without resetting FSM state.
+ * Semantics: pad i is considered "touched" iff `sample.raw[i] < thresh[i]`.
+ * thresh[i] = 0 disables the pad (it can never read as touched). Safe to
+ * call live; values take effect on the next srv_input_process() call. */
+void srv_input_set_thresholds(const uint16_t thresh[TOUCH_PAD_COUNT]);
+
+/* Update the debounce window in milliseconds without resetting FSM state.
+ * Rounded up to whole 10 ms ticks and clamped to >= 1 tick. */
+void srv_input_set_debounce_ms(uint16_t ms);
 
 #ifdef __cplusplus
 }

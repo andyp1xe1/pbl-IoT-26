@@ -113,7 +113,10 @@ extern "C" ag_result_t dd_touch_read(touch_sample_t *out) {
         if (is_button(i)) {
             /* Button pressed = GPIO pulled LOW by the switch. */
             const bool pressed = (digitalRead(kGpio[i]) == LOW);
-            out->raw[i] = pressed ? 0u : 1u;   /* 0=pressed, 1=open — diagnostic only */
+            /* Normalise to the same scale as the capacitive pad so srv_input's
+             * uniform `raw < threshold` check works for both pad types
+             * (0 = firmly touched, 4095 = open). */
+            out->raw[i] = pressed ? 0u : 4095u;
             if (pressed) {
                 mask |= (uint8_t)(1u << i);
             }

@@ -1,11 +1,31 @@
-import { CONFIG_FLAG_DIRTY } from "../ble/types";
+import {
+  ALT_FORBIDDEN,
+  CLICK_ACTION_LABELS,
+  CONFIG_FLAG_DIRTY,
+  ClickAction,
+  NO_MODIFIER,
+  PAD_NAMES,
+} from "../ble/types";
 import { Row, Section } from "../ui/Section";
 import { Screen } from "../ui/Screen";
 import { Slider } from "../ui/Slider";
 import { TouchBar } from "../ui/TouchBar";
 import { store, useAppState } from "../state/store";
 
-const FINGERS = ["Thumb", "Index", "Middle", "Ring"];
+const PRIMARY_OPTIONS: ClickAction[] = [
+  ClickAction.None,
+  ClickAction.Left,
+  ClickAction.Right,
+  ClickAction.Middle,
+  ClickAction.ScrollUp,
+  ClickAction.ScrollDown,
+  ClickAction.Clutch,
+  ClickAction.ScrollMode,
+];
+
+const ALT_OPTIONS: ClickAction[] = PRIMARY_OPTIONS.filter(
+  (a) => !ALT_FORBIDDEN.has(a),
+);
 
 export function TuneScreen() {
   const s = useAppState();
@@ -15,16 +35,22 @@ export function TuneScreen() {
 
   if (!connected) {
     return (
-      <Screen title="Tune" subtitle="Adjust how the glove moves the cursor.">
-        <Section footer="Connect to the glove from the Connect tab to adjust these settings.">
+      <Screen title="Tune">
+        <Section>
           <Row label="Not connected" />
         </Section>
       </Screen>
     );
   }
 
+  // Non-modifier pad indices, in the order their alt slot is stored.
+  const altPads =
+    cfg.modifierPad === NO_MODIFIER
+      ? []
+      : [0, 1, 2, 3].filter((p) => p !== cfg.modifierPad);
+
   return (
-    <Screen title="Tune" subtitle="Adjust how the glove moves the cursor.">
+    <Screen title="Tune">
       <Section title="Pointer">
         <Slider
           label="Sensitivity X"
@@ -48,37 +74,117 @@ export function TuneScreen() {
           label="Dead zone"
           min={0}
           max={300}
-          step={5}
+          step={1}
           value={cfg.deadzoneMrad}
-          display={`${(cfg.deadzoneMrad / 1000).toFixed(2)} rad`}
+          display={`${(cfg.deadzoneMrad / 1000).toFixed(3)} rad`}
           onChange={(v) => store.updateConfigLocal({ deadzoneMrad: v })}
         />
       </Section>
 
-      <Section title="Touch — live" footer="Red marker shows the click threshold.">
-        {s.telemetry
-          ? s.telemetry.touch.map((v, i) => (
-              <TouchBar
-                key={i}
-                label={FINGERS[i]}
-                value={v}
-                threshold={i === 1 ? 500 : undefined}
+      <Section title="Fusion & input">
+        <Slider
+          label="Madgwick β"
+          min={0}
+          max={300}
+          step={1}
+          value={cfg.madgwickBetaMilli}
+          display={`${(cfg.madgwickBetaMilli / 1000).toFixed(3)}`}
+          onChange={(v) => store.updateConfigLocal({ madgwickBetaMilli: v })}
+        />
+        <Slider
+          label="Debounce"
+          min={5}
+          max={200}
+          step={1}
+          value={cfg.debounceMs}
+          display={`${cfg.debounceMs} ms`}
+          onChange={(v) => store.updateConfigLocal({ debounceMs: v })}
+        />
+      </Section>
+
+      <Section title="Touch — live & thresholds">
+        {PAD_NAMES.map((name, i) => {
+          const live = s.telemetry?.touch[i] ?? 0;
+          const thresh = cfg.touchThreshold[i];
+          return (
+            <div key={name} className="touch-tune">
+              <TouchBar label={name} value={live} threshold={thresh} />
+              <Slider
+                label=""
+                min={1}
+                max={4095}
+                step={10}
+                value={thresh}
+                display={`${thresh}`}
+                onChange={(v) => {
+                  const arr = [...cfg.touchThreshold] as typeof cfg.touchThreshold;
+                  arr[i] = v;
+                  store.updateConfigLocal({ touchThreshold: arr });
+                }}
               />
-            ))
-          : FINGERS.map((f) => <TouchBar key={f} label={f} value={0} />)}
+            </div>
+          );
+        })}
       </Section>
 
       <Section title="Click mapping">
+        {PAD_NAMES.map((name, i) => (
+          <Row
+            key={name}
+            label={name}
+            value={
+              <ActionSelect
+                value={cfg.clickAction[i]}
+                options={PRIMARY_OPTIONS}
+                onChange={(a) => {
+                  const arr = [...cfg.clickAction] as typeof cfg.clickAction;
+                  arr[i] = a;
+                  store.updateConfigLocal({ clickAction: arr });
+                }}
+              />
+            }
+          />
+        ))}
+
         <Row
-          label="Index → Left, Middle → Right"
-          value={<Radio checked={cfg.clickMap === 0} />}
-          onClick={() => store.updateConfigLocal({ clickMap: 0 })}
+          label="Modifier finger"
+          value={
+            <select
+              className="action-select"
+              value={cfg.modifierPad === NO_MODIFIER ? "none" : String(cfg.modifierPad)}
+              onChange={(e) => {
+                const v = e.target.value === "none" ? NO_MODIFIER : Number(e.target.value);
+                store.updateConfigLocal({ modifierPad: v });
+              }}
+            >
+              <option value="none">None</option>
+              {PAD_NAMES.map((name, i) => (
+                <option key={name} value={i}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          }
         />
-        <Row
-          label="Index → Right, Middle → Left"
-          value={<Radio checked={cfg.clickMap === 1} />}
-          onClick={() => store.updateConfigLocal({ clickMap: 1 })}
-        />
+
+        {altPads.map((pad, slot) => (
+          <Row
+            key={`alt-${pad}`}
+            label={`${PAD_NAMES[pad]} (while modifier held)`}
+            value={
+              <ActionSelect
+                value={cfg.clickActionAlt[slot]}
+                options={ALT_OPTIONS}
+                onChange={(a) => {
+                  const arr = [...cfg.clickActionAlt] as typeof cfg.clickActionAlt;
+                  arr[slot] = a;
+                  store.updateConfigLocal({ clickActionAlt: arr });
+                }}
+              />
+            }
+          />
+        ))}
+
         <div className="card-actions">
           <button
             className="btn btn-primary"
@@ -93,6 +199,26 @@ export function TuneScreen() {
   );
 }
 
-function Radio({ checked }: { checked: boolean }) {
-  return <span className={`radio${checked ? " radio-on" : ""}`} />;
+function ActionSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: ClickAction;
+  options: ClickAction[];
+  onChange: (a: ClickAction) => void;
+}) {
+  return (
+    <select
+      className="action-select"
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value) as ClickAction)}
+    >
+      {options.map((a) => (
+        <option key={a} value={a}>
+          {CLICK_ACTION_LABELS[a]}
+        </option>
+      ))}
+    </select>
+  );
 }

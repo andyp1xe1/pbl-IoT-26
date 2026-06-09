@@ -69,6 +69,72 @@ static motion_config_t motion_from_cfg(const dd_ble_cfg_t *c)
     return mc;
 }
 
+/* Resolve which action a pad fires now, given the current modifier state.
+ * If the modifier_pad is held (and isn't `pad` itself), use the alt table;
+ * otherwise the primary action. */
+static uint8_t resolve_action(uint8_t pad, uint8_t pads_held,
+                              const dd_ble_cfg_t *c)
+{
+    if (c->modifier_pad <= 3
+        && c->modifier_pad != pad
+        && (pads_held & (uint8_t)(1u << c->modifier_pad)))
+    {
+        uint8_t idx = pad < c->modifier_pad ? pad : (uint8_t)(pad - 1);
+        if (idx >= 3) return AG_CLICK_NONE;
+        return c->click_action_alt[idx];
+    }
+    return c->click_action[pad];
+}
+
+/* Apply one click action to mouse-button/wheel state. Updates *buttons and
+ * *wheel_out in place; returns true iff a HID report should be queued now. */
+static bool apply_action(uint8_t action, bool pressed,
+                         uint8_t *buttons, int8_t *wheel_out)
+{
+    *wheel_out = 0;
+    switch (action) {
+    case AG_CLICK_NONE:
+        return false;
+    case AG_CLICK_LEFT:
+        if (pressed) *buttons |= 0x01u; else *buttons &= (uint8_t)~0x01u;
+        return true;
+    case AG_CLICK_RIGHT:
+        if (pressed) *buttons |= 0x02u; else *buttons &= (uint8_t)~0x02u;
+        return true;
+    case AG_CLICK_MIDDLE:
+        if (pressed) *buttons |= 0x04u; else *buttons &= (uint8_t)~0x04u;
+        return true;
+    case AG_CLICK_SCROLL_UP:
+        if (pressed) { *wheel_out = +1; return true; }
+        return false;
+    case AG_CLICK_SCROLL_DOWN:
+        if (pressed) { *wheel_out = -1; return true; }
+        return false;
+    case AG_CLICK_CLUTCH:
+        srv_motion_set_clutch(pressed);
+        return false;
+    case AG_CLICK_SCROLL_MODE:
+        g_scroll_mode.store(pressed);
+        return false;
+    }
+    return false;
+}
+
+static const char *action_name(uint8_t a)
+{
+    switch (a) {
+    case AG_CLICK_NONE:        return "NONE";
+    case AG_CLICK_LEFT:        return "LEFT";
+    case AG_CLICK_RIGHT:       return "RIGHT";
+    case AG_CLICK_MIDDLE:      return "MIDDLE";
+    case AG_CLICK_SCROLL_UP:   return "SCROLL_UP";
+    case AG_CLICK_SCROLL_DOWN: return "SCROLL_DOWN";
+    case AG_CLICK_CLUTCH:      return "CLUTCH";
+    case AG_CLICK_SCROLL_MODE: return "SCROLL_MODE";
+    default:                   return "?";
+    }
+}
+
 } /* namespace */
 
 /* ── t_imu_sample — poll MPU6050 at 100 Hz ─────────────────────────────── */
@@ -112,10 +178,24 @@ void t_imu_sample_fn(void *)
 void t_fusion_fn(void *)
 {
     uint32_t count = 0;
+    uint32_t applied_cfg_version = 0;
 
     for (;;) {
         imu_sample_t s;
         if (xQueueReceive(q_imu, &s, portMAX_DELAY) != pdTRUE) continue;
+
+        /* Apply companion-app β changes from this (owning) task so srv_fusion
+         * stays single-threaded per its contract. */
+        uint32_t v = dd_ble_cfg_config_version();
+        if (v != applied_cfg_version) {
+            dd_ble_cfg_t c;
+            dd_ble_cfg_get_config(&c);
+            const float beta = (float)c.madgwick_beta_milli / 1000.0f;
+            srv_fusion_init(beta);
+            applied_cfg_version = v;
+            printf("[fusion] applied config v%u: beta=%.3f\n",
+                   (unsigned)v, (double)beta);
+        }
 
         oriented_frame_t f;
         if (srv_fusion_update(&s, &f.q) != AG_OK) continue;
@@ -143,8 +223,25 @@ void t_touch_fn(void *)
     TickType_t        last   = xTaskGetTickCount();
     const TickType_t  period = pdMS_TO_TICKS(10);
     uint32_t          count  = 0;
+    uint32_t          applied_cfg_version = 0;
 
     for (;;) {
+        /* Apply companion-app threshold/debounce changes from this (owning)
+         * task so srv_input stays single-threaded per its contract. */
+        uint32_t v = dd_ble_cfg_config_version();
+        if (v != applied_cfg_version) {
+            dd_ble_cfg_t c;
+            dd_ble_cfg_get_config(&c);
+            srv_input_set_thresholds(c.touch_threshold);
+            srv_input_set_debounce_ms(c.debounce_ms);
+            applied_cfg_version = v;
+            printf("[touch] applied config v%u: thresh=[%u,%u,%u,%u] debounce=%ums\n",
+                   (unsigned)v,
+                   c.touch_threshold[0], c.touch_threshold[1],
+                   c.touch_threshold[2], c.touch_threshold[3],
+                   c.debounce_ms);
+        }
+
         touch_sample_t s;
         if (dd_touch_read(&s) == AG_OK) {
             /* Snapshot raw pad readings for the companion-app telemetry. */
@@ -247,113 +344,66 @@ void t_motion_fn(void *)
     }
 }
 
-/* ── t_app — drain button events, publish on change ───────────────────── */
+/* ── t_app — drain button events, dispatch per data-driven click map ───── */
 /*
- * Interaction model:
+ * Interaction model (Plan 11.3):
  *
- *   index alone       → left click  (HID button bit 0)
- *   middle alone      → right click (HID button bit 1)
- *   index + middle    → CLUTCH: cursor freezes; reposition hand; release to resume
- *   ring (hold)       → SCROLL: vertical tilt scrolls wheel; cursor frozen;
- *                       clicks suppressed while ring is held
+ *   Each pad fires its `click_action[i]` on PRESS / RELEASE.
+ *   If `modifier_pad` is set and held, the *other* pads fire their
+ *   `click_action_alt[]` entry instead. The modifier pad itself produces
+ *   no output while held — its only job is to shift the action table.
  *
- * Clutch and scroll both call srv_motion_set_clutch; refresh_clutch() keeps
- * the two paths from racing — clutch stays engaged while EITHER is active.
+ *   SCROLL_MODE and CLUTCH are hold gestures and bypass the HID report path:
+ *   they toggle the matching internal flag (`g_scroll_mode`, srv_motion clutch)
+ *   directly. The cursor pipeline observes these flags downstream.
  */
 void t_app_fn(void *)
 {
-    bool index_held  = false;
-    bool middle_held = false;
-    bool ring_held   = false;
-    bool clutch_on   = false;   /* button-chord clutch */
-
-    uint32_t applied_cfg_version = 0;
-    uint8_t  click_map = 0;      /* 0 = index→L/middle→R, 1 = swapped */
-
-    /* Engage/disengage the motion clutch.
-     * Only the button-chord clutch (clutch_on) freezes the motion mapper.
-     * Scroll mode (ring_held) does NOT engage the clutch — the mapper keeps
-     * running so t_motion_fn can read a live dy to drive the wheel. The
-     * cursor freezes in scroll mode because t_motion_fn routes dy to the
-     * wheel field instead of emitting cursor reports. */
-    auto refresh_clutch = [&]() {
-        srv_motion_set_clutch(clutch_on);
-    };
+    uint8_t      pads_held           = 0;
+    uint32_t     applied_cfg_version = 0;
+    dd_ble_cfg_t cfg = {};
+    dd_ble_cfg_get_config(&cfg);
 
     for (;;) {
         input_event_t ev;
         if (xQueueReceive(q_buttons, &ev, portMAX_DELAY) != pdTRUE) continue;
 
-        /* Pick up companion-app click-mapping changes. */
-        uint32_t cfg_version = dd_ble_cfg_config_version();
-        if (cfg_version != applied_cfg_version) {
-            dd_ble_cfg_t c;
-            dd_ble_cfg_get_config(&c);
-            click_map = c.click_map;
-            applied_cfg_version = cfg_version;
+        uint32_t v = dd_ble_cfg_config_version();
+        if (v != applied_cfg_version) {
+            dd_ble_cfg_get_config(&cfg);
+            applied_cfg_version = v;
         }
 
         const bool is_press   = (ev.kind == INPUT_EVT_PRESS);
         const bool is_release = (ev.kind == INPUT_EVT_RELEASE);
-        if (!is_press && !is_release) continue;
+        if (!is_press && !is_release)       continue;
+        if (ev.pad >= TOUCH_PAD_COUNT)      continue;
 
-        /* ── Scroll mode: ring finger ──────────────────────────────────── */
-        if (ev.pad == TOUCH_PAD_RING) {
-            ring_held = is_press;
-            g_scroll_mode.store(ring_held);
-            refresh_clutch();
-            printf("[touch] SCROLL %s\n", ring_held ? "on" : "off");
+        const uint8_t pad_bit = (uint8_t)(1u << ev.pad);
+        if (is_press) pads_held |= pad_bit;
+        else          pads_held &= (uint8_t)~pad_bit;
+
+        if (ev.pad == cfg.modifier_pad) {
+            printf("[touch] MODIFIER pad=%u %s\n",
+                   (unsigned)ev.pad, is_press ? "engaged" : "released");
             continue;
         }
 
-        if (ev.pad != TOUCH_PAD_INDEX && ev.pad != TOUCH_PAD_MIDDLE) continue;
+        const uint8_t action = resolve_action(ev.pad, pads_held, &cfg);
+        if (action == AG_CLICK_NONE) continue;
 
-        /* Update per-finger held state before evaluating the chord. */
-        if (ev.pad == TOUCH_PAD_INDEX)  index_held  = is_press;
-        if (ev.pad == TOUCH_PAD_MIDDLE) middle_held = is_press;
+        uint8_t buttons = g_current_buttons.load();
+        int8_t  wheel   = 0;
+        const bool emit = apply_action(action, is_press, &buttons, &wheel);
 
-        const bool both_held = index_held && middle_held;
+        printf("[touch] pad=%u %s %s\n", (unsigned)ev.pad,
+               action_name(action), is_press ? "PRESSED" : "released");
 
-        /* ── Clutch entry: both fingers now held ──────────────────────── */
-        if (both_held && !clutch_on) {
-            clutch_on = true;
-            g_current_buttons.store(0);
+        if (emit) {
+            g_current_buttons.store(buttons);
             hid_mouse_report_t r = {};
-            queue_put_drop_oldest(q_hid, &r);
-            refresh_clutch();
-            printf("[touch] CLUTCH on  — reposition hand freely\n");
-            continue;
-        }
-
-        /* ── Clutch exit: one finger lifted while clutch was active ───── */
-        if (!both_held && clutch_on) {
-            clutch_on = false;
-            g_current_buttons.store(0);
-            refresh_clutch();
-            printf("[touch] CLUTCH off — cursor active\n");
-            continue;
-        }
-
-        /* ── Suppress clicks while clutch or scroll is active ─────────── */
-        if (clutch_on || ring_held) continue;
-
-        /* ── Normal single-finger button handling ─────────────────────── *
-         * click_map==1 swaps which physical finger fires left vs right. */
-        uint8_t bit;
-        if (ev.pad == TOUCH_PAD_INDEX) bit = click_map ? 0x02u : 0x01u;
-        else                           bit = click_map ? 0x01u : 0x02u;
-        const char *name = (bit == 0x01) ? "LEFT" : "RIGHT";
-
-        uint8_t prev = g_current_buttons.load();
-        uint8_t next = prev;
-        if (is_press)   next |=  bit;
-        if (is_release) next &= ~bit;
-
-        if (next != prev) {
-            g_current_buttons.store(next);
-            printf("[touch] %s %s\n", name, is_press ? "PRESSED" : "released");
-            hid_mouse_report_t r = {};
-            r.buttons = next;
+            r.buttons = buttons;
+            r.wheel   = wheel;
             queue_put_drop_oldest(q_hid, &r);
         }
     }

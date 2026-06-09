@@ -18,9 +18,6 @@ export function ConnectionChip() {
     <div className={`conn-chip conn-${tone}`}>
       <span className="conn-dot" />
       <span className="conn-text">{label}</span>
-      {s.status === "connected" && s.battery != null && (
-        <span className="conn-batt">{s.battery}%</span>
-      )}
     </div>
   );
 }

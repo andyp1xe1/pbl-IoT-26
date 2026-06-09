@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react";
 import { AirGloveClient, isWebBluetoothAvailable } from "../ble/client";
-import { MockAirGloveClient } from "../ble/mockClient";
 import {
   AgConfig,
   AgStatus,
@@ -13,7 +12,6 @@ import {
 } from "../ble/types";
 
 export interface AppState {
-  useMock: boolean;
   webBluetoothAvailable: boolean;
   status: ConnectionStatus;
   error: string | null;
@@ -22,12 +20,10 @@ export interface AppState {
   telemetry: AgTelemetry | null;
   lastStatus: AgStatus | null;
   deviceInfo: DeviceInfo | null;
-  battery: number | null;
 }
 
 class Store {
   private state: AppState = {
-    useMock: !isWebBluetoothAvailable(),
     webBluetoothAvailable: isWebBluetoothAvailable(),
     status: "disconnected",
     error: null,
@@ -36,23 +32,20 @@ class Store {
     telemetry: null,
     lastStatus: null,
     deviceInfo: null,
-    battery: null,
   };
 
-  private client: IAirGloveClient = this.makeClient(this.state.useMock);
+  private client: IAirGloveClient = this.makeClient();
   private listeners = new Set<() => void>();
 
-  private makeClient(useMock: boolean): IAirGloveClient {
-    const client = useMock ? new MockAirGloveClient() : new AirGloveClient();
+  private makeClient(): IAirGloveClient {
+    const client = new AirGloveClient();
     client.onConnectionChange((s) => {
       this.patch({ status: s });
       if (s === "connected") void this.refreshAfterConnect();
       if (s === "disconnected")
-        this.patch({ telemetry: null, deviceInfo: null, battery: null });
+        this.patch({ telemetry: null, deviceInfo: null });
     });
-    client.onTelemetry((t) =>
-      this.patch({ telemetry: t, battery: t.batteryPct }),
-    );
+    client.onTelemetry((t) => this.patch({ telemetry: t }));
     client.onStatus((st) => this.patch({ lastStatus: st }));
     return client;
   }
@@ -67,12 +60,6 @@ class Store {
   private patch(next: Partial<AppState>) {
     this.state = { ...this.state, ...next };
     this.listeners.forEach((fn) => fn());
-  }
-
-  setUseMock(useMock: boolean) {
-    if (this.state.status !== "disconnected") return;
-    this.client = this.makeClient(useMock);
-    this.patch({ useMock });
   }
 
   async connect() {
@@ -90,12 +77,11 @@ class Store {
 
   private async refreshAfterConnect() {
     try {
-      const [config, deviceInfo, battery] = await Promise.all([
+      const [config, deviceInfo] = await Promise.all([
         this.client.readConfig(),
         this.client.readDeviceInfo(),
-        this.client.readBattery(),
       ]);
-      this.patch({ config, deviceInfo, battery, configDirtyLocal: false });
+      this.patch({ config, deviceInfo, configDirtyLocal: false });
     } catch (err) {
       this.patch({ error: errorMessage(err) });
     }

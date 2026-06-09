@@ -34,8 +34,10 @@ extern QueueHandle_t q_hid;           /* depth 8, item hid_mouse_report_t */
  * Single-byte atomic load/store is lock-free on ESP32. */
 extern std::atomic<uint8_t> g_current_buttons;
 
-/* True while the ring finger is held and scroll mode is active.
- * Writer: t_app. Reader: t_motion (routes dy → wheel instead of cursor). */
+/* True while any pad mapped to AG_CLICK_SCROLL_MODE is held.
+ * Writer: t_app (via apply_action). Reader: t_motion (routes dy → wheel
+ * instead of cursor). The pad that drives this is data-driven via the
+ * companion-app config; nothing is hard-coded to the ring finger any more. */
 extern std::atomic<bool> g_scroll_mode;
 
 /* Opaque top-level FSM state for the heartbeat to log. */

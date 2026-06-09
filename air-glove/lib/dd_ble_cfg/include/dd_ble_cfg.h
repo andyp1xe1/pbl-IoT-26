@@ -25,12 +25,35 @@
 extern "C" {
 #endif
 
-/* Runtime tuning, in logical units (no wire encoding leaks to callers). */
+/* Per-pad click action enum. Stored as u8 in click_action[] / click_action_alt[]. */
+typedef enum {
+    AG_CLICK_NONE        = 0,
+    AG_CLICK_LEFT        = 1,
+    AG_CLICK_RIGHT       = 2,
+    AG_CLICK_MIDDLE      = 3,
+    AG_CLICK_SCROLL_UP   = 4,   /* PRESS → one wheel notch up   */
+    AG_CLICK_SCROLL_DOWN = 5,   /* PRESS → one wheel notch down */
+    AG_CLICK_CLUTCH      = 6,   /* hold to freeze cursor        */
+    AG_CLICK_SCROLL_MODE = 7,   /* hold to reroute tilt → wheel */
+    AG_CLICK_MAX         = AG_CLICK_SCROLL_MODE,
+} ag_click_action_t;
+
+/* Sentinel: modifier_pad == AG_NO_MODIFIER → no chord modifier set. */
+#define AG_NO_MODIFIER  ((uint8_t)0xFF)
+
+/* Runtime tuning, in logical units (no wire encoding leaks to callers).
+ * Layout mirrors Plan 11.2 / wire format v2 (28 bytes). */
 typedef struct {
-    uint16_t sens_x_milli;    /* X sensitivity ×1000 (1000 = 1.00×)  */
-    uint16_t sens_y_milli;    /* Y sensitivity ×1000                 */
-    uint16_t deadzone_mrad;   /* per-frame angular deadzone, milli-rad */
-    uint8_t  click_map;       /* 0 = index→L / middle→R, 1 = swapped */
+    uint16_t sens_x_milli;             /* X sensitivity ×1000 (1000 = 1.00×) */
+    uint16_t sens_y_milli;             /* Y sensitivity ×1000                */
+    uint16_t deadzone_mrad;            /* per-frame angular deadzone (m-rad) */
+    uint16_t madgwick_beta_milli;      /* Madgwick β ×1000                   */
+    uint16_t debounce_ms;              /* per-pad debounce, ms               */
+    uint16_t touch_threshold[4];       /* per-pad raw-count threshold        */
+    uint8_t  click_action[4];          /* per-pad action (ag_click_action_t) */
+    uint8_t  modifier_pad;             /* pad index 0..3, or AG_NO_MODIFIER  */
+    uint8_t  click_action_alt[3];      /* alt action for non-modifier pads,
+                                          indexed by the non-modifier slot   */
 } dd_ble_cfg_t;
 
 /* One live telemetry frame pushed to the host. */

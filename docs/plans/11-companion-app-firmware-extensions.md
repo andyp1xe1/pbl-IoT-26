@@ -99,9 +99,10 @@ typedef enum : uint8_t {
     AG_CLICK_LEFT        = 1,
     AG_CLICK_RIGHT       = 2,
     AG_CLICK_MIDDLE      = 3,
-    AG_CLICK_SCROLL_UP   = 4,
-    AG_CLICK_SCROLL_DOWN = 5,
-    AG_CLICK_CLUTCH      = 6,   /* hold-to-freeze cursor (srv_motion clutch) */
+    AG_CLICK_SCROLL_UP   = 4,    /* PRESS = one wheel notch up   */
+    AG_CLICK_SCROLL_DOWN = 5,    /* PRESS = one wheel notch down */
+    AG_CLICK_CLUTCH      = 6,    /* hold-to-freeze cursor (srv_motion clutch) */
+    AG_CLICK_SCROLL_MODE = 7,    /* hold to reroute glove tilt → mouse wheel */
 } ag_click_action_t;
 ```
 
@@ -116,7 +117,9 @@ deadzone_mrad        = 4         (matches current 0.004f)
 madgwick_beta_milli  = 50        (matches current srv_fusion_init(0.05f))
 debounce_ms          = 30
 touch_threshold[]    = {600, 600, 600, 600}
-click_action[]       = {NONE, LEFT, RIGHT, SCROLL_UP}
+click_action[]       = {NONE, LEFT, RIGHT, SCROLL_MODE}
+                       /* THUMB=NONE, INDEX=LEFT, MIDDLE=RIGHT, RING=SCROLL_MODE
+                          — preserves today's hold-ring-to-scroll gesture. */
 modifier_pad         = 0xFF
 click_action_alt[]   = {NONE, NONE, NONE}
 ```
@@ -127,6 +130,7 @@ click_action_alt[]   = {NONE, NONE, NONE}
 - If `modifier_pad != 0xFF` and that pad is currently held, the **other** pads fire `click_action_alt[]` instead of `click_action[]`.
 - The modifier pad itself does nothing while held (its `click_action` is suppressed).
 - `AG_CLICK_CLUTCH` is special on solo only: PRESS → `srv_motion_set_clutch(true)`, RELEASE → `srv_motion_set_clutch(false)`. Not allowed in `click_action_alt`.
+- `AG_CLICK_SCROLL_MODE` is a *hold* gesture: PRESS sets `g_scroll_mode = true`, RELEASE clears it. `t_motion_fn` then reroutes `dy` into the wheel field (existing implementation preserved). This is the data-driven replacement for the hard-coded ring-finger scroll.
 - That's it. No multi-pad chords beyond the single modifier. No tap-vs-hold timing.
 
 Example user setup:

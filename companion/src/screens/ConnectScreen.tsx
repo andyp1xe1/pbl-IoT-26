@@ -6,23 +6,31 @@ import { TELEMETRY_FLAG_HID_CONNECTED } from "../ble/types";
 export function ConnectScreen() {
   const s = useAppState();
   const connected = s.status === "connected";
-  const hidConnected =
+  const hidActive =
     s.telemetry != null &&
     (s.telemetry.flags & TELEMETRY_FLAG_HID_CONNECTED) !== 0;
 
+  if (!s.webBluetoothAvailable) {
+    return (
+      <Screen title="Connect">
+        <Section>
+          <Row label="Web Bluetooth" value="Not available" />
+          <p className="section-footer">Open this page in Chrome or Edge.</p>
+        </Section>
+      </Screen>
+    );
+  }
+
   return (
-    <Screen
-      title="Connect"
-      subtitle="Link this app to your glove to tune, calibrate, and watch live sensor data."
-    >
-      <Section title="Connection">
+    <Screen title="Connect">
+      <Section title="Device">
         <Row
           label="Air Glove"
           value={
             <StatusPill
               status={
                 s.status === "connecting"
-                  ? "Connecting…"
+                  ? "Connecting"
                   : connected
                     ? "Connected"
                     : "Not connected"
@@ -32,21 +40,15 @@ export function ConnectScreen() {
           }
         />
         {connected && (
-          <>
-            <Row
-              label="Battery"
-              value={s.battery != null ? `${s.battery}%` : "—"}
-            />
-            <Row
-              label="Mouse (HID)"
-              value={
-                <StatusPill
-                  status={hidConnected ? "Active" : "Idle"}
-                  tone={hidConnected ? "good" : "off"}
-                />
-              }
-            />
-          </>
+          <Row
+            label="Mouse"
+            value={
+              <StatusPill
+                status={hidActive ? "Active" : "Idle"}
+                tone={hidActive ? "good" : "off"}
+              />
+            }
+          />
         )}
         <div className="card-actions">
           {!connected ? (
@@ -55,7 +57,7 @@ export function ConnectScreen() {
               disabled={s.status === "connecting"}
               onClick={() => void store.connect()}
             >
-              {s.status === "connecting" ? "Connecting…" : "Connect to Air Glove"}
+              Connect
             </button>
           ) : (
             <button
@@ -67,24 +69,6 @@ export function ConnectScreen() {
           )}
         </div>
         {s.error && <p className="section-footer error-text">{s.error}</p>}
-      </Section>
-
-      <Section title="First time?">
-        <ol className="steps steps-numbered">
-          <li>Open your OS Bluetooth settings and pair “AirGlove” (it appears as a mouse).</li>
-          <li>Come back here and tap Connect to adjust settings and calibrate.</li>
-        </ol>
-      </Section>
-
-      <Section
-        title="How it works"
-        footer="The glove pairs as a normal Bluetooth mouse in your operating system. This app connects separately to its configuration service — it does not handle mouse pairing."
-      >
-        <Row label="Pairing" value="Owned by your OS" />
-        <Row label="This app" value="Config & telemetry" />
-        {!s.webBluetoothAvailable && (
-          <Row label="Mode" value="Mock (no hardware)" />
-        )}
       </Section>
     </Screen>
   );

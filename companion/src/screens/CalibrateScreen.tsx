@@ -13,8 +13,8 @@ export function CalibrateScreen() {
 
   if (!connected) {
     return (
-      <Screen title="Calibrate" subtitle="Zero out sensor bias and touch baselines.">
-        <Section footer="Connect to the glove from the Connect tab to calibrate.">
+      <Screen title="Calibrate">
+        <Section>
           <Row label="Not connected" />
         </Section>
       </Screen>
@@ -22,7 +22,7 @@ export function CalibrateScreen() {
   }
 
   return (
-    <Screen title="Calibrate" subtitle="Zero out sensor bias and touch baselines.">
+    <Screen title="Calibrate">
       <Section title="IMU — live">
         <StatGrid>
           <StatBox label="ACCEL X" value={g(t?.accel[0])} />

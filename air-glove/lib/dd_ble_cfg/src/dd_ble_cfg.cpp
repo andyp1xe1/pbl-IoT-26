@@ -30,15 +30,27 @@ constexpr char kStatusUuid[] = "41470005-7a13-4b1e-9c2f-1d0e5f6a7b8c";
 constexpr char kNvsNamespace[] = "agcfg";
 constexpr char kNvsKey[]       = "cfg";
 
-constexpr size_t kConfigSize    = 10;
-constexpr size_t kTelemetrySize = 24;
-constexpr size_t kStatusSize    = 4;
+/* Wire format v2 — see docs/plans/11-companion-app-firmware-extensions.md §11.2. */
+constexpr uint8_t kConfigVersion = 2;
+constexpr size_t  kConfigSize    = 28;
+constexpr size_t  kTelemetrySize = 24;
+constexpr size_t  kStatusSize    = 4;
 
 const dd_ble_cfg_t kBuiltinDefaults = {
-    /* sens_x_milli  */ 1000,
-    /* sens_y_milli  */ 1000,
-    /* deadzone_mrad */ 4,
-    /* click_map     */ 0,
+    /* sens_x_milli        */ 1000,
+    /* sens_y_milli        */ 1000,
+    /* deadzone_mrad       */ 4,
+    /* madgwick_beta_milli */ 50,    /* matches existing srv_fusion_init(0.05f) */
+    /* debounce_ms         */ 30,
+    /* touch_threshold[]   */ {600, 600, 600, 600},
+    /* click_action[]      */ {
+        AG_CLICK_NONE,         /* THUMB  — unused by default                       */
+        AG_CLICK_LEFT,         /* INDEX  — left click                              */
+        AG_CLICK_RIGHT,        /* MIDDLE — right click                             */
+        AG_CLICK_SCROLL_MODE,  /* RING   — hold to scroll (replaces g_scroll_mode) */
+    },
+    /* modifier_pad        */ AG_NO_MODIFIER,
+    /* click_action_alt[]  */ {AG_CLICK_NONE, AG_CLICK_NONE, AG_CLICK_NONE},
 };
 
 static dd_ble_cfg_t   s_cfg          = kBuiltinDefaults;
@@ -61,31 +73,52 @@ static inline uint16_t get_u16(const uint8_t *p) {
     return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));
 }
 
-static void encode_config(uint8_t buf[kConfigSize], const dd_ble_cfg_t *c) {
-    buf[0] = 1;                 /* version */
-    buf[1] = 0;                 /* flags (clean) */
-    put_u16(&buf[2], c->sens_x_milli);
-    put_u16(&buf[4], c->sens_y_milli);
-    put_u16(&buf[6], c->deadzone_mrad);
-    buf[8] = c->click_map;
-    buf[9] = 0;
+/* Clamp helper. */
+static inline uint16_t clamp_u16(uint16_t v, uint16_t lo, uint16_t hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+static inline uint8_t clamp_action(uint8_t a) {
+    return (a > AG_CLICK_MAX) ? AG_CLICK_NONE : a;
 }
 
-/* Parse and clamp a 10-byte config blob. Returns false if too short. */
+static void encode_config(uint8_t buf[kConfigSize], const dd_ble_cfg_t *c) {
+    buf[0] = kConfigVersion;
+    buf[1] = 0;                                      /* flags (clean)       */
+    put_u16(&buf[2],  c->sens_x_milli);
+    put_u16(&buf[4],  c->sens_y_milli);
+    put_u16(&buf[6],  c->deadzone_mrad);
+    put_u16(&buf[8],  c->madgwick_beta_milli);
+    put_u16(&buf[10], c->debounce_ms);
+    for (int i = 0; i < 4; ++i) put_u16(&buf[12 + i * 2], c->touch_threshold[i]);
+    for (int i = 0; i < 4; ++i) buf[20 + i] = c->click_action[i];
+    buf[24] = c->modifier_pad;
+    for (int i = 0; i < 3; ++i) buf[25 + i] = c->click_action_alt[i];
+}
+
+/* Parse, version-check, and clamp a v2 (28-byte) config blob.
+ * No fallback: a wrong size or wrong version is a hard reject. */
 static bool decode_config(dd_ble_cfg_t *c, const uint8_t *p, size_t n) {
-    if (n < kConfigSize) return false;
-    uint16_t sx = get_u16(&p[2]);
-    uint16_t sy = get_u16(&p[4]);
-    uint16_t dz = get_u16(&p[6]);
-    if (sx < 100)  sx = 100;          /* guard divide-by-near-zero downstream */
-    if (sx > 5000) sx = 5000;
-    if (sy < 100)  sy = 100;
-    if (sy > 5000) sy = 5000;
-    if (dz > 1000) dz = 1000;
-    c->sens_x_milli  = sx;
-    c->sens_y_milli  = sy;
-    c->deadzone_mrad = dz;
-    c->click_map     = (p[8] != 0) ? 1 : 0;
+    if (n < kConfigSize)        return false;
+    if (p[0] != kConfigVersion) return false;
+
+    c->sens_x_milli        = clamp_u16(get_u16(&p[2]),  100, 5000);
+    c->sens_y_milli        = clamp_u16(get_u16(&p[4]),  100, 5000);
+    c->deadzone_mrad       = clamp_u16(get_u16(&p[6]),    0, 1000);
+    c->madgwick_beta_milli = clamp_u16(get_u16(&p[8]),    0, 1000);
+    c->debounce_ms         = clamp_u16(get_u16(&p[10]),   5,  200);
+    for (int i = 0; i < 4; ++i) {
+        c->touch_threshold[i] = clamp_u16(get_u16(&p[12 + i * 2]), 1, 4095);
+    }
+    for (int i = 0; i < 4; ++i) c->click_action[i] = clamp_action(p[20 + i]);
+    uint8_t mod = p[24];
+    c->modifier_pad = (mod == AG_NO_MODIFIER || mod < 4) ? mod : AG_NO_MODIFIER;
+    for (int i = 0; i < 3; ++i) {
+        uint8_t a = clamp_action(p[25 + i]);
+        /* AG_CLICK_CLUTCH / AG_CLICK_SCROLL_MODE are hold-modal: forbid in alt
+         * to keep modifier+alt semantics simple. */
+        if (a == AG_CLICK_CLUTCH || a == AG_CLICK_SCROLL_MODE) a = AG_CLICK_NONE;
+        c->click_action_alt[i] = a;
+    }
     return true;
 }
 
@@ -113,9 +146,16 @@ public:
         portEXIT_CRITICAL(&s_mux);
         /* Re-publish a canonical (clean-flag) value so reads are consistent. */
         seed_config_characteristic();
-        printf("[dd_ble_cfg] config: sensX=%u sensY=%u dz=%umrad click=%u\n",
+        printf("[dd_ble_cfg] config v2: sensX=%u sensY=%u dz=%umrad "
+               "beta=%u debounce=%ums mod=%u "
+               "click=[%u,%u,%u,%u] alt=[%u,%u,%u]\n",
                parsed.sens_x_milli, parsed.sens_y_milli,
-               parsed.deadzone_mrad, parsed.click_map);
+               parsed.deadzone_mrad, parsed.madgwick_beta_milli,
+               parsed.debounce_ms, (unsigned)parsed.modifier_pad,
+               parsed.click_action[0], parsed.click_action[1],
+               parsed.click_action[2], parsed.click_action[3],
+               parsed.click_action_alt[0], parsed.click_action_alt[1],
+               parsed.click_action_alt[2]);
     }
 };
 

@@ -1,25 +1,55 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONFIG_SIZE,
   decodeConfig,
   decodeStatus,
   decodeTelemetry,
   encodeConfig,
 } from "./codec";
-import { AgConfig, StatusState } from "./types";
+import {
+  AgConfig,
+  ClickAction,
+  CONFIG_VERSION_V2,
+  defaultConfig,
+  NO_MODIFIER,
+  StatusState,
+} from "./types";
 
-describe("config codec", () => {
-  it("round-trips", () => {
+describe("config codec (v2)", () => {
+  it("round-trips a populated config", () => {
     const cfg: AgConfig = {
-      version: 1,
-      flags: 1,
+      version: CONFIG_VERSION_V2,
+      flags: 0,
       sensXMilli: 1400,
       sensYMilli: 1200,
       deadzoneMrad: 80,
-      clickMap: 1,
-      reserved: 0,
+      madgwickBetaMilli: 75,
+      debounceMs: 25,
+      touchThreshold: [500, 600, 700, 800],
+      clickAction: [
+        ClickAction.None,
+        ClickAction.Left,
+        ClickAction.Right,
+        ClickAction.ScrollMode,
+      ],
+      modifierPad: 0,
+      clickActionAlt: [ClickAction.None, ClickAction.ScrollDown, ClickAction.Middle],
     };
     const dv = new DataView(encodeConfig(cfg).buffer);
     expect(decodeConfig(dv)).toEqual(cfg);
+  });
+
+  it("emits the v2 version byte", () => {
+    const bytes = encodeConfig(defaultConfig());
+    expect(bytes[0]).toBe(CONFIG_VERSION_V2);
+    expect(bytes.length).toBe(CONFIG_SIZE);
+  });
+
+  it("clamps modifier_pad to NO_MODIFIER if out of range", () => {
+    const cfg = defaultConfig();
+    cfg.modifierPad = 99;
+    const dv = new DataView(encodeConfig(cfg).buffer);
+    expect(decodeConfig(dv).modifierPad).toBe(NO_MODIFIER);
   });
 });
 
