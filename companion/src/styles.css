@@ -244,6 +244,7 @@ body {
   grid-template-columns: 1fr;
   grid-template-areas:
     "pointer"
+    "mix"
     "fusion"
     "touch"
     "click";
@@ -251,6 +252,7 @@ body {
 }
 
 .tune-pointer { grid-area: pointer; }
+.tune-mix     { grid-area: mix;     }
 .tune-fusion  { grid-area: fusion;  }
 .tune-touch   { grid-area: touch;   }
 .tune-click   { grid-area: click;   }
@@ -261,9 +263,174 @@ body {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
     grid-template-areas:
       "pointer touch"
+      "mix     mix"
       "fusion  touch"
       "click   click";
   }
+}
+
+/* ---------- Motion mix ---------- */
+
+.motion-mix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.motion-mix-caption {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.mix-grid {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: center;
+}
+
+.mix-grid-head {
+  display: contents;
+}
+.mix-grid-head .mix-col-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.mix-row {
+  display: contents;
+}
+
+.mix-axis-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 8px 0;
+}
+
+.mix-row-dim .mix-axis-label,
+.mix-row-dim .bipolar {
+  opacity: 0.42;
+}
+
+/* ---------- Bipolar slider ---------- */
+
+.bipolar {
+  --bp-thumb: 50%;
+  --bp-fill-start: 50%;
+  --bp-fill-end: 50%;
+
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.bipolar-track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: visible;
+}
+
+.bipolar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--bp-fill-start);
+  right: calc(100% - var(--bp-fill-end));
+  background: var(--accent);
+  border-radius: 999px;
+  transition: left 0.06s linear, right 0.06s linear;
+}
+
+.bipolar-center {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--muted);
+  border-radius: 1px;
+  opacity: 0.55;
+}
+
+/* Native range input on top — invisible track, only the thumb is shown so
+ * the styled track underneath becomes the visible bar. */
+.bipolar input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: ew-resize;
+}
+.bipolar input[type="range"]::-webkit-slider-runnable-track {
+  background: transparent;
+  border: none;
+  height: 100%;
+}
+.bipolar input[type="range"]::-moz-range-track {
+  background: transparent;
+  border: none;
+  height: 100%;
+}
+.bipolar input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.15);
+  margin-top: -6px;
+  cursor: ew-resize;
+}
+.bipolar input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.15);
+  cursor: ew-resize;
+}
+
+.bipolar-zero .bipolar-fill {
+  background: transparent;
+}
+.bipolar-zero input[type="range"]::-webkit-slider-thumb {
+  border-color: var(--muted);
+}
+.bipolar-zero input[type="range"]::-moz-range-thumb {
+  border-color: var(--muted);
+}
+
+.bipolar-value {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  text-align: right;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.bipolar-zero .bipolar-value {
+  color: var(--muted);
 }
 
 /* ---------- Cards / sections ---------- */

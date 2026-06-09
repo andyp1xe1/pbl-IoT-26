@@ -6,6 +6,7 @@ import {
   NO_MODIFIER,
   PAD_NAMES,
 } from "../ble/types";
+import { MotionMix } from "../ui/MotionMix";
 import { Row, Section } from "../ui/Section";
 import { Slider } from "../ui/Slider";
 import { TouchBar } from "../ui/TouchBar";
@@ -78,6 +79,10 @@ function TuneBody() {
           display={`${(cfg.deadzoneMrad / 1000).toFixed(3)} rad`}
           onChange={(v) => store.updateConfigLocal({ deadzoneMrad: v })}
         />
+      </Section>
+
+      <Section title="Motion mix" className="tune-mix">
+        <MotionMix cfg={cfg} onChange={(patch) => store.updateConfigLocal(patch)} />
       </Section>
 
       <Section title="Fusion & input" className="tune-fusion">
