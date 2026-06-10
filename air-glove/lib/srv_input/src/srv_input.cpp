@@ -31,7 +31,7 @@ static uint16_t    s_counter[TOUCH_PAD_COUNT];
 static uint16_t    s_debounce_ticks = 2;
 
 /* Per-pad raw-count thresholds. A pad reads as "touched" when sample.raw[i]
- * < s_threshold[i]. Defaults are chosen so the cap pad (thumb) trips at the
+ * < s_threshold[i]. Defaults are chosen so the cap pad (pinky) trips at the
  * same level as the old dd_touch internal threshold; buttons (which dd_touch
  * normalises to 0 = pressed / 4095 = open) trip with any value < 600. */
 static uint16_t    s_threshold[TOUCH_PAD_COUNT] = {600, 600, 600, 600};

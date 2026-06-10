@@ -13,19 +13,16 @@ import { OrbitControls, useGLTF, Center, Bounds } from "@react-three/drei";
 import { Suspense, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import type { GLTF } from "three-stdlib";
-import { PAD_NAMES } from "../ble/types";
+import { PAD_DISPLAY_ORDER, PAD_NAMES } from "../ble/types";
 
 const MODEL_PATH = "/hand.glb";
 
-/**
- * Mesh names for the four wired pads: index, middle, ring, pinky.
- * Thumb is intentionally not mapped anymore, so clicking it does nothing.
- */
+/** Slot → mesh name, in PAD_NAMES order. Thumb mesh is unmapped. */
 const FINGER_MESH_NAMES: Record<number, string[]> = {
-  0: ["Circle003_1"], // Index
-  1: ["Circle003_2"], // Middle
+  0: ["Circle003_4"], // Pinky
+  1: ["Circle003_1"], // Index
   2: ["Circle003_3"], // Ring
-  3: ["Circle003_4"], // Pinky
+  3: ["Circle003_2"], // Middle
 };
 
 /** Click any mesh while this is true to log its name to the console. */
@@ -283,15 +280,15 @@ export function HandMap3D({ selected, onSelect }: HandMap3DProps) {
 
       {/* Finger tab-strip */}
       <div className="hand3d-tabs" role="tablist">
-        {PAD_NAMES.map((name, i) => (
+        {PAD_DISPLAY_ORDER.map((i) => (
           <button
-            key={name}
+            key={i}
             role="tab"
             aria-selected={selected === i}
             className={`hand3d-tab${selected === i ? " hand3d-tab--active" : ""}`}
             onClick={() => handleSelect(i)}
           >
-            {name}
+            {PAD_NAMES[i]}
           </button>
         ))}
       </div>

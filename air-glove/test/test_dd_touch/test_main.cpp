@@ -7,7 +7,7 @@
  *
  * Pre-conditions on the bench:
  *   - ESP32 DevKit-C powered over USB.
- *   - Conductive pads attached to GPIO4/2/15/13 (thumb/index/middle/ring).
+ *   - Conductive pads attached to GPIO4/14/15/13 (pinky/index/ring/middle).
  *   - FINGERS OFF THE PADS until the prompt for the interactive test.
  */
 

@@ -1,10 +1,10 @@
 /* dd_touch — hybrid input driver.
  *
- * THUMB (GPIO4)  : ESP32 native capacitive-touch (`touchRead()`), used as a
- *                  gesture reference pad on the glove palm/thumb.
- * INDEX (GPIO14) : tactile push-button wired between GPIO and GND, read via
- * MIDDLE (GPIO15)  `digitalRead()` with INPUT_PULLUP.  Button pressed = LOW.
- * RING  (GPIO13)
+ * PINKY  (GPIO4)  : ESP32 native capacitive-touch (`touchRead()`), used as a
+ *                   gesture reference pad on the glove palm/pinky.
+ * INDEX  (GPIO14) : tactile push-button wired between GPIO and GND, read via
+ * RING   (GPIO15)   `digitalRead()` with INPUT_PULLUP.  Button pressed = LOW.
+ * MIDDLE (GPIO13)
  *
  * The button pads bypass the capacitive peripheral entirely — no calibration,
  * no EMA baseline, no threshold arithmetic.  srv_input debounces all pads
@@ -38,7 +38,7 @@ static const uint8_t kGpio[TOUCH_PAD_COUNT] = { 4, 14, 15, 13 };
  * Empty mask = all four pads are capacitive (touchRead on T0/T6/T3/T4). */
 static constexpr uint8_t kButtonMask = 0;
 
-/* ── Capacitive-touch settings (THUMB only) ───────────────────────────── */
+/* ── Capacitive-touch settings (PINKY only) ───────────────────────────── */
 
 /* Touch fires when raw < baseline * kThreshRatio.
  * 0.85 = 15% capacitance drop. */
@@ -71,7 +71,7 @@ extern "C" ag_result_t dd_touch_init(void) {
         }
     }
 
-    /* Capacitive calibration for non-button pads (THUMB only).
+    /* Capacitive calibration for non-button pads (PINKY only).
      * Prime the peripheral first — first reading after boot is often 0. */
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
         if (!is_button(i)) {
@@ -115,8 +115,8 @@ extern "C" ag_result_t dd_touch_init(void) {
                         s_threshold[i] = apply_ratio(buf[i]);
                     }
                 }
-                printf("[dd_touch] loaded baselines from NVS: thumb=%u\n",
-                       s_baseline[TOUCH_PAD_THUMB]);
+                printf("[dd_touch] loaded baselines from NVS: pinky=%u\n",
+                       s_baseline[TOUCH_PAD_PINKY]);
             }
             prefs.end();
         }
@@ -124,9 +124,9 @@ extern "C" ag_result_t dd_touch_init(void) {
 
     s_initialized = true;
 
-    printf("[dd_touch] init OK — thumb cap baseline:%u threshold:%u  "
-           "index/middle/ring: button (INPUT_PULLUP)  cap_wiring=%s\n",
-           s_baseline[TOUCH_PAD_THUMB], s_threshold[TOUCH_PAD_THUMB],
+    printf("[dd_touch] init OK — pinky cap baseline:%u threshold:%u  "
+           "index/ring/middle: button (INPUT_PULLUP)  cap_wiring=%s\n",
+           s_baseline[TOUCH_PAD_PINKY], s_threshold[TOUCH_PAD_PINKY],
            cap_wiring_ok ? "OK" : "CHECK WIRES");
 
     return AG_OK;
@@ -167,7 +167,7 @@ extern "C" ag_result_t dd_touch_read(touch_sample_t *out) {
                 mask |= (uint8_t)(1u << i);
             }
         } else {
-            /* Capacitive path (THUMB). */
+            /* Capacitive path (PINKY). */
             const uint16_t raw = (uint16_t)touchRead(kGpio[i]);
             out->raw[i] = raw;
 

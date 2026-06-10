@@ -23,11 +23,13 @@ typedef struct {
     uint64_t t_us;      /* monotonic microseconds */
 } imu_sample_t;
 
+/* Slot order is hardware wiring, not anatomical. Renumbering is a wire-format
+ * break (BLE codec, NVS baselines, companion config). */
 typedef enum {
-    TOUCH_PAD_THUMB = 0,
+    TOUCH_PAD_PINKY = 0,
     TOUCH_PAD_INDEX,
-    TOUCH_PAD_MIDDLE,
     TOUCH_PAD_RING,
+    TOUCH_PAD_MIDDLE,
     TOUCH_PAD_COUNT
 } touch_pad_id_t;
 

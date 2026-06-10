@@ -77,7 +77,7 @@ typedef struct {
 typedef struct {
     int16_t  accel_mg[3];     /* milli-g                              */
     int16_t  gyro_mdps[3];    /* milli-deg/s                          */
-    uint16_t touch[4];        /* raw pad readings: thumb,index,mid,ring */
+    uint16_t touch[4];        /* raw pad readings: pinky,index,ring,middle */
     uint8_t  battery_pct;     /* 0..100                               */
     uint8_t  flags;           /* see DD_BLE_CFG_TFLAG_*                */
 } dd_ble_cfg_telemetry_t;

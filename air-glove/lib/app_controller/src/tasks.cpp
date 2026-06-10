@@ -269,14 +269,14 @@ void t_touch_fn(void *)
              * stays so the user can see the values when idle too. */
             static uint16_t last_raw[TOUCH_PAD_COUNT] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
             static const char *kPadName[TOUCH_PAD_COUNT] =
-                {"thumb", "index", "middle", "ring"};
+                {"pinky", "index", "ring", "middle"};
             static const uint8_t kPadGpio[TOUCH_PAD_COUNT] = {4, 14, 15, 13};
             for (int i = 0; i < TOUCH_PAD_COUNT; ++i) {
                 int delta = (int)s.raw[i] - (int)last_raw[i];
                 int adelta = delta < 0 ? -delta : delta;
                 /* Buttons swing 4095↔0 so any change is significant; cap pad
                  * drifts with EMA so require a real step. */
-                int threshold = (i == TOUCH_PAD_THUMB) ? 20 : 1000;
+                int threshold = (i == TOUCH_PAD_PINKY) ? 20 : 1000;
                 if (adelta >= threshold) {
                     printf("[touch] %s (GPIO%u): %u -> %u\n",
                            kPadName[i], kPadGpio[i],
@@ -288,8 +288,8 @@ void t_touch_fn(void *)
             /* 2 s heartbeat — keeps the live values visible even when
              * nothing is changing, so you can sanity-check the baseline. */
             if (++count % 200 == 0) {
-                printf("[touch] raw  thumb:%4u  index:%4u  middle:%4u  "
-                       "ring:%4u  mask=0x%02X\n",
+                printf("[touch] raw  pinky:%4u  index:%4u  ring:%4u  "
+                       "middle:%4u  mask=0x%02X\n",
                        s.raw[0], s.raw[1], s.raw[2], s.raw[3],
                        s.touched_mask);
             }
@@ -651,8 +651,8 @@ void t_cfg_fn(void *)
                 }
                 dd_touch_set_baselines(bl);
                 ag_result_t save_rc = dd_touch_save_baselines();
-                printf("[cfg] touch cal: n=%u thumb_baseline=%u save=%d\n",
-                       (unsigned)n, bl[TOUCH_PAD_THUMB], (int)save_rc);
+                printf("[cfg] touch cal: n=%u pinky_baseline=%u save=%d\n",
+                       (unsigned)n, bl[TOUCH_PAD_PINKY], (int)save_rc);
                 dd_ble_cfg_set_status(
                     op,
                     save_rc == AG_OK ? DD_BLE_CFG_ST_SUCCESS : DD_BLE_CFG_ST_FAIL,

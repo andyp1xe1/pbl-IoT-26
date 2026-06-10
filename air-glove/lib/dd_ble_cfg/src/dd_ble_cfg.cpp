@@ -52,11 +52,11 @@ const dd_ble_cfg_t kBuiltinDefaults = {
     /* madgwick_beta_milli     */ 145,
     /* debounce_ms             */ 15,
     /* touch_threshold[]       */ {20, 20, 20, 20},
-    /* click_action[]          */ {
+    /* click_action[] — slot order [PINKY, INDEX, RING, MIDDLE] */ {
         AG_CLICK_NONE,
         AG_CLICK_LEFT,
-        AG_CLICK_RIGHT,
         AG_CLICK_SCROLL_MODE,
+        AG_CLICK_RIGHT,
     },
     /* modifier_pad            */ AG_NO_MODIFIER,
     /* click_action_alt[]      */ {AG_CLICK_NONE, AG_CLICK_NONE, AG_CLICK_NONE},

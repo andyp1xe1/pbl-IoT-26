@@ -5,6 +5,7 @@ import {
   CONFIG_FLAG_DIRTY,
   ClickAction,
   NO_MODIFIER,
+  PAD_DISPLAY_ORDER,
   PAD_NAMES,
   type AgConfig,
 } from "../ble/types";
@@ -138,9 +139,9 @@ function TuneBody() {
                   }}
                 >
                   <option value="none">None</option>
-                  {PAD_NAMES.map((name, i) => (
-                    <option key={name} value={i}>
-                      {name}
+                  {PAD_DISPLAY_ORDER.map((i) => (
+                    <option key={i} value={i}>
+                      {PAD_NAMES[i]}
                     </option>
                   ))}
                 </select>

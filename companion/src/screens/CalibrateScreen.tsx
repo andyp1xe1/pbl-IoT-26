@@ -1,4 +1,4 @@
-import { Command, PAD_NAMES, StatusState } from "../ble/types";
+import { Command, PAD_DISPLAY_ORDER, PAD_NAMES, StatusState } from "../ble/types";
 import { Section } from "../ui/Section";
 import { StatBox, StatGrid } from "../ui/StatBox";
 import { TouchBar } from "../ui/TouchBar";
@@ -67,8 +67,8 @@ function CalibrateBody() {
 
         <Section title="Touch — live">
           <div className="cal-touch-grid">
-            {PAD_NAMES.map((name, i) => (
-              <FingerTouchPanel key={name} index={i} name={name} />
+            {PAD_DISPLAY_ORDER.map((i) => (
+              <FingerTouchPanel key={i} index={i} name={PAD_NAMES[i]} />
             ))}
           </div>
         </Section>
