@@ -10,7 +10,7 @@
   --accent-hover: #5d73be;
   --accent-weak: #eef1fb;
   --good: #4cb583;
-  --danger: #cc4d50;
+  --danger: #df6063;
   --warn: #d99a3a;
   --radius: 22px;
   --radius-sm: 14px;
@@ -234,13 +234,10 @@ body {
   align-items: start;
 }
 
-/* Tune screen: three full-width stacked sections.
- *   1. Controls strip (dead zone + debounce on one compact row)
- *   2. Motion-mix matrix (the hero)
- *   3. Buttons (live touch + threshold + click action, per finger)
- * The grid is single-column at every breakpoint — the visual rhythm
- * relies on each card occupying the full content width and reading
- * top-to-bottom. */
+/* Tune screen: explicit named-area grid so Pointer + Fusion live in a left
+ * column, the taller Touch card spans both rows on the right, and Click
+ * mapping sits on its own full-width row below. Avoids the auto-fit
+ * cascade that left Click mapping orphaned in row 2 with empty space. */
 .tune-layout {
   display: grid;
   gap: 22px;
@@ -248,340 +245,25 @@ body {
   grid-template-areas:
     "controls"
     "mix"
-    "buttons";
+    "buttons"
+    "click";
   align-items: start;
 }
 
 .tune-controls { grid-area: controls; }
 .tune-mix      { grid-area: mix;      }
 .tune-buttons  { grid-area: buttons;  }
+.tune-click    { grid-area: click;    }
 
 @media (min-width: 900px) {
   .tune-layout {
-    gap: 28px;
+    gap: 28px 32px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    grid-template-areas:
+      "controls buttons"
+      "mix      buttons"
+      "click    click";
   }
-}
-
-/* Compact controls strip: dead zone + debounce share one card, each
- * a single horizontal row (label · slider · value) instead of the
- * default two-line slider-row. Tightens vertical sprawl up top. */
-.tune-controls-card {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-.tune-controls-card > .slider-row {
-  display: grid;
-  grid-template-columns: minmax(80px, auto) minmax(0, 1fr) minmax(56px, auto);
-  align-items: center;
-  gap: 16px;
-  padding: 18px 22px;
-  border-bottom: none;
-}
-.tune-controls-card > .slider-row + .slider-row {
-  border-left: 1px solid var(--border);
-}
-.tune-controls-card .slider-head {
-  display: contents;
-}
-.tune-controls-card .slider-head .row-label {
-  font-size: 14px;
-  font-weight: 600;
-}
-.tune-controls-card .slider-head .row-value {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  color: var(--accent);
-  font-weight: 600;
-}
-.tune-controls-card .slider-row > input[type="range"] {
-  margin: 0;
-}
-@media (max-width: 599px) {
-  .tune-controls-card {
-    grid-template-columns: 1fr;
-  }
-  .tune-controls-card > .slider-row + .slider-row {
-    border-left: none;
-    border-top: 1px solid var(--border);
-  }
-}
-
-/* ---------- Motion mix ----------
- *
- * Full-width matrix card. Fusion controls (β + Madgwick toggle) sit
- * in the card's own header bar so the whole "how fusion is wired"
- * story reads in one place. No big titles or caption — the column
- * heads and group labels carry enough context. */
-
-.motion-mix {
-  width: 100%;
-}
-
-.mix-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 24px;
-  padding: 14px 22px;
-  border-bottom: 1px solid var(--border);
-}
-
-.mix-beta-inline {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.mix-beta-inline input[type="range"] {
-  margin: 0;
-  width: 100%;
-}
-.mix-beta-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-}
-.mix-beta-value {
-  font-size: 13px;
-  color: var(--accent);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  min-width: 44px;
-  text-align: right;
-}
-.mix-beta-inline input[type="range"]:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.motion-mix-toggle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.mix-card {
-  padding: 0;
-}
-.mix-card > .mix-grid {
-  padding: 14px 22px 16px;
-}
-
-.mix-grid {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.4fr) minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: 28px;
-  row-gap: 4px;
-  align-items: center;
-}
-
-/* Sub-band header: groups the 9 axes into "Raw IMU" and "Fused" bands
- * so the wire-stable ordering reads as two named blocks instead of one
- * undifferentiated stack of nine. */
-.mix-grid-head {
-  display: contents;
-}
-.mix-grid-head .mix-col-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding-bottom: 6px;
-  align-self: end;
-}
-
-.mix-group-label {
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--text);
-  text-transform: uppercase;
-  padding-bottom: 6px;
-}
-
-.mix-band-sep {
-  grid-column: 1 / -1;
-  height: 1px;
-  background: var(--border);
-  margin: 14px 0 4px;
-}
-
-.mix-grid-head-sub > .mix-group-label {
-  padding-top: 4px;
-  padding-bottom: 4px;
-}
-
-.mix-group-hint {
-  font-style: normal;
-  font-weight: 600;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-}
-
-.mix-row {
-  display: contents;
-}
-.mix-row > .mix-axis-label,
-.mix-row > .bipolar {
-  padding-block: 6px;
-  border-top: 1px solid var(--border);
-}
-/* First row in a band: no top border (the band header already separated). */
-.mix-row:first-of-type > .mix-axis-label,
-.mix-row:first-of-type > .bipolar,
-.mix-grid-head-sub + .mix-row > .mix-axis-label,
-.mix-grid-head-sub + .mix-row > .bipolar {
-  border-top: none;
-}
-
-.mix-axis-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.mix-row-dim .mix-axis-label,
-.mix-row-dim .bipolar {
-  opacity: 0.42;
-}
-
-
-/* ---------- Bipolar slider ----------
- *
- * Layout: 2-column grid (control · value). The control is the only thing
- * the <input type="range"> covers, so the native thumb's horizontal
- * position is computed against the actual track width — not the whole
- * row. Track and input share the control box; the styled track sits
- * below, the native input is layered on top with everything but the
- * thumb made transparent. */
-
-.bipolar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 56px;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 0;
-}
-
-.bipolar-control {
-  --bp-fill-start: 50%;
-  --bp-fill-end: 50%;
-  position: relative;
-  height: 22px;
-  display: flex;
-  align-items: center;
-}
-
-.bipolar-track {
-  position: relative;
-  width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--border);
-  overflow: visible;
-}
-
-.bipolar-fill {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--bp-fill-start);
-  right: calc(100% - var(--bp-fill-end));
-  background: var(--accent);
-  border-radius: 999px;
-  transition: left 0.06s linear, right 0.06s linear;
-}
-
-.bipolar-center {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  left: 50%;
-  width: 2px;
-  margin-left: -1px;
-  background: var(--muted);
-  border-radius: 1px;
-  opacity: 0.55;
-}
-
-.bipolar input[type="range"] {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  -webkit-appearance: none;
-  appearance: none;
-  cursor: ew-resize;
-}
-.bipolar input[type="range"]:focus {
-  outline: none;
-}
-.bipolar input[type="range"]::-webkit-slider-runnable-track {
-  background: transparent;
-  border: none;
-  height: 100%;
-}
-.bipolar input[type="range"]::-moz-range-track {
-  background: transparent;
-  border: none;
-  height: 100%;
-}
-.bipolar input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.20);
-  cursor: ew-resize;
-}
-.bipolar input[type="range"]::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.20);
-  cursor: ew-resize;
-}
-
-.bipolar-zero .bipolar-fill {
-  background: transparent;
-}
-.bipolar-zero input[type="range"]::-webkit-slider-thumb {
-  border-color: var(--muted);
-}
-.bipolar-zero input[type="range"]::-moz-range-thumb {
-  border-color: var(--muted);
-}
-
-.bipolar-value {
-  font-size: 13px;
-  font-weight: 600;
-  text-align: right;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.bipolar-zero .bipolar-value {
-  color: var(--muted);
 }
 
 /* ---------- Cards / sections ---------- */
@@ -819,13 +501,13 @@ body {
 }
 
 .btn-ghost-danger {
-  background: rgba(204, 77, 80, 0.10);
+  background: rgba(223, 96, 99, 0.10);
   color: var(--danger);
-  box-shadow: inset 0 0 0 1px rgba(204, 77, 80, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(223, 96, 99, 0.22);
 }
 .btn-ghost-danger:hover:not(:disabled) {
-  background: rgba(204, 77, 80, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(204, 77, 80, 0.36);
+  background: rgba(223, 96, 99, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(223, 96, 99, 0.36);
 }
 
 .btn:disabled {
@@ -948,66 +630,45 @@ input[type="range"] {
   border-bottom: none;
 }
 
-/* Tune-screen Buttons card: per-finger row with four cells —
- *   [name] [live bar] [threshold slider] [click action]
- * — so the user sees the whole story for one finger on one row
- * instead of cross-referencing two separate cards. */
-.buttons-head,
-.button-row {
-  display: grid;
-  grid-template-columns: 70px minmax(0, 1.1fr) minmax(0, 1fr) minmax(176px, auto);
-  align-items: center;
-  gap: 18px;
-  padding: 10px 18px;
+/* Grouped (bar + threshold slider) cell in the Tune screen Touch card.
+ * One border per pad group, not per row, so the bar and the slider read
+ * as a single control unit. */
+.touch-tune {
+  padding: 12px 4px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.touch-tune:last-child {
+  border-bottom: none;
 }
 
-.buttons-head {
-  padding-top: 14px;
-  padding-bottom: 6px;
+.touch-tune .touch-row {
+  padding-bottom: 4px;
 }
-.buttons-col-label {
+
+.touch-tune-thresh {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px 0 74px; /* left indent matches .touch-label width + gap */
+}
+
+.touch-tune-thresh-label {
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
-}
-.buttons-col-label:last-of-type {
-  padding-left: 6px;
-}
-
-.button-row {
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-  padding-bottom: 12px;
+  width: 70px;
+  flex-shrink: 0;
 }
 
-.button-row-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.button-row .touch-row {
-  padding: 0;
-}
-.button-row .touch-label {
-  display: none;
-}
-.button-row .touch-track {
+.touch-tune-thresh input[type="range"] {
   flex: 1;
+  min-width: 0;
 }
 
-.button-row-thresh {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 36px;
-  align-items: center;
-  gap: 10px;
-}
-.button-row-thresh input[type="range"] {
-  width: 100%;
-}
-.button-row-thresh-value {
+.touch-tune-thresh-value {
+  width: 42px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-size: 13px;
@@ -1292,6 +953,10 @@ input[type="range"] {
   max-width: 38ch;
 }
 
+.device-caption-error {
+  color: var(--danger);
+}
+
 /* Inline failure banner shown directly under the artwork on Home when the
  * last connect attempt failed. Soft danger-tinted pill rather than full
  * caption — it sits between the artwork and the controls so the reason
@@ -1300,14 +965,12 @@ input[type="range"] {
   margin: 4px 0 0;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-  background: rgba(204, 77, 80, 0.10);
-  border: 1px solid rgba(204, 77, 80, 0.28);
+  background: rgba(223, 96, 99, 0.10);
+  border: 1px solid rgba(223, 96, 99, 0.25);
   color: var(--danger);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13.5px;
   line-height: 1.45;
   text-align: center;
-  text-wrap: balance;
   max-width: 42ch;
 }
 
@@ -1459,8 +1122,8 @@ input[type="range"] {
   max-width: 36ch;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-  background: rgba(204, 77, 80, 0.10);
-  border: 1px solid rgba(204, 77, 80, 0.22);
+  background: rgba(223, 96, 99, 0.10);
+  border: 1px solid rgba(223, 96, 99, 0.22);
   color: var(--danger);
   font-size: 13px;
   line-height: 1.5;
