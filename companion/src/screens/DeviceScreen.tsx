@@ -59,11 +59,12 @@ export function DeviceScreen() {
     <Screen title={title} gridClass="device-grid">
       <div className="device-stage">
         <Artwork variant="device" stateClass={artworkClass(link)} />
-        <p className="device-tagline">The future is at your fingertips.</p>
-        {link.kind === "failed" && link.reason && (
+        {link.kind === "failed" && link.reason ? (
           <p className="device-error" role="alert">
             {link.reason}
           </p>
+        ) : (
+          <p className="device-tagline">The future is at your fingertips.</p>
         )}
         {paired ? (
           <PairedView link={link} known={known} deviceInfo={s.deviceInfo} />
@@ -106,12 +107,20 @@ function PairedView({
           link={link}
         />
       </Section>
-      <button
-        className="btn btn-ghost-danger device-forget"
-        onClick={() => void store.forget(known?.id)}
-      >
-        Forget device
-      </button>
+      <div className="device-danger-row">
+        <button
+          className="btn btn-ghost-danger"
+          onClick={() => void store.forget(known?.id)}
+        >
+          Forget device
+        </button>
+        <button
+          className="btn btn-ghost-danger"
+          onClick={() => void store.factoryReset()}
+        >
+          Factory reset
+        </button>
+      </div>
     </>
   );
 }

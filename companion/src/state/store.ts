@@ -62,10 +62,29 @@ class Store {
   private listeners = new Set<() => void>();
 
   constructor() {
-    // Surface previously-permitted devices so the Connect screen can show a
-    // "Reconnect <name>" affordance without opening the chooser. Fire and
-    // forget — browsers without getDevices() simply yield [].
-    void this.refreshKnownDevices();
+    // Rehydrate the last-opened tab so a refresh doesn't dump the user back
+    // on Home. Other slices (config, telemetry, knownDevices) come from the
+    // device on (re)connect, so they don't need persisting.
+    const savedTab = loadTab();
+    if (savedTab) this.state.tab = savedTab;
+
+    // List previously-permitted devices, then attempt a single silent
+    // reconnect to the first one. Fire-and-forget — browsers without
+    // getDevices() simply yield []; reconnect failures are swallowed so a
+    // refresh while the glove is out of range or off doesn't surface an
+    // error before the user does anything.
+    void this.bootReconnect();
+  }
+
+  private async bootReconnect() {
+    await this.refreshKnownDevices();
+    const id = this.state.knownDevices[0]?.id;
+    if (!id || !this.state.webBluetoothAvailable) return;
+    try {
+      await this.client.reconnect(id);
+    } catch {
+      /* one-shot — user can flip the switch manually if it fails */
+    }
   }
 
   private makeClient(): IAirGloveClient {
@@ -154,6 +173,7 @@ class Store {
 
   setTab = (tab: TabId) => {
     this.patch({ tab });
+    saveTab(tab);
   };
 
   async connect() {
@@ -416,6 +436,34 @@ function errorMessage(err: unknown): string {
     return err.message || err.name;
   }
   return String(err);
+}
+
+/* ── Tab persistence ──
+ * Only the active tab is mirrored to localStorage; everything else either
+ * comes from the device on connect or is ephemeral. */
+const TAB_KEY = "airglove.tab";
+const TAB_VALUES: ReadonlySet<TabId> = new Set([
+  "device",
+  "tune",
+  "calibrate",
+  "about",
+]);
+
+function loadTab(): TabId | null {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    return v && TAB_VALUES.has(v as TabId) ? (v as TabId) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveTab(tab: TabId) {
+  try {
+    localStorage.setItem(TAB_KEY, tab);
+  } catch {
+    /* localStorage may be disabled (private mode, quota); persistence is best-effort */
+  }
 }
 
 export const store = new Store();
