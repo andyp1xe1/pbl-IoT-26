@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   ALT_FORBIDDEN,
   CLICK_ACTION_LABELS,
@@ -88,98 +88,11 @@ function TuneBody() {
   const threshTuple = cfg.touchThreshold as [number, number, number, number];
   const live = liveTouch[selectedPad] ?? 0;
   const thresh = cfg.touchThreshold[selectedPad];
-  const scored = live > thresh;
+  // Raw value drops toward 0 on finger contact — a press registers when live < threshold
+  const scored = live < thresh;
 
   return (
     <>
-      {/* ── Controls (dead zone + debounce) ── teammate addition */}
-      <section className="section tune-controls">
-        <div className="section-head">
-          <h2 className="section-title">Controls</h2>
-        </div>
-        <div className="card tune-controls-card">
-          <Slider
-            label="Dead zone"
-            min={0}
-            max={300}
-            step={1}
-            value={cfg.deadzoneMrad}
-            display={`${(cfg.deadzoneMrad / 1000).toFixed(3)} rad`}
-            onChange={(v) => store.updateConfigLocal({ deadzoneMrad: v })}
-          />
-          <Slider
-            label="Debounce"
-            min={5}
-            max={200}
-            step={1}
-            value={cfg.debounceMs}
-            display={`${cfg.debounceMs} ms`}
-            onChange={(v) => store.updateConfigLocal({ debounceMs: v })}
-          />
-        </div>
-      </section>
-
-      {/* ── Motion mix (sensitivity / fusion) ── teammate addition */}
-      <MotionMix
-        cfg={cfg}
-        onChange={(patch: Partial<AgConfig>) => store.updateConfigLocal(patch)}
-        className="tune-mix"
-      />
-
-      {/* ── Buttons: live bars + per-pad threshold ── teammate addition.
-           Note: use per-iteration lv/thr, not the selected-pad live/thresh. */}
-      <Section title="Buttons" className="tune-buttons">
-        <div className="buttons-head">
-          <span />
-          <span className="buttons-col-label">Live</span>
-          <span className="buttons-col-label">Threshold</span>
-          <span className="buttons-col-label">Action</span>
-        </div>
-        {PAD_NAMES.map((name, i) => {
-          const lv = s.telemetry?.touch[i] ?? 0;
-          const thr = cfg.touchThreshold[i];
-          return (
-            <div key={name} className="button-row">
-              <span className="button-row-label">{name}</span>
-              <TouchBar
-                label=""
-                value={lv}
-                threshold={thr}
-                max={TOUCH_BAR_MAX}
-                invert
-              />
-              <div className="button-row-thresh">
-                <input
-                  type="range"
-                  min={1}
-                  max={TOUCH_BAR_MAX}
-                  step={1}
-                  value={thr}
-                  aria-label={`${name} threshold`}
-                  onChange={(e) => {
-                    const arr = [
-                      ...cfg.touchThreshold,
-                    ] as typeof cfg.touchThreshold;
-                    arr[i] = Number(e.target.value);
-                    store.updateConfigLocal({ touchThreshold: arr });
-                  }}
-                />
-                <span className="button-row-thresh-value">{thr}</span>
-              </div>
-              <ActionSelect
-                value={cfg.clickAction[i]}
-                options={PRIMARY_OPTIONS}
-                onChange={(a) => {
-                  const arr = [...cfg.clickAction] as typeof cfg.clickAction;
-                  arr[i] = a;
-                  store.updateConfigLocal({ clickAction: arr });
-                }}
-              />
-            </div>
-          );
-        })}
-      </Section>
-
       {/* ── Click mapping: 3D hand picker + per-finger detail ── our addition */}
       <Section title="Click mapping" className="tune-click">
         <div className="click-map-layout">
@@ -319,32 +232,38 @@ function TuneBody() {
 
               {/* Touch threshold — per-finger calibration */}
               <div className="click-map-field">
-                <div className="click-map-thresh-header">
-                  <span className="click-map-field-label">
-                    Touch threshold
-                  </span>
+                <span className="click-map-field-label">Touch threshold</span>
+                <div className="click-map-thresh-row">
+                  <input
+                    type="range"
+                    className="click-map-thresh-slider"
+                    min={1}
+                    max={TOUCH_BAR_MAX}
+                    step={1}
+                    value={thresh}
+                    style={{ "--pct": `${(thresh / TOUCH_BAR_MAX) * 100}%` } as React.CSSProperties}
+                    onChange={(e) => {
+                      const arr = [
+                        ...cfg.touchThreshold,
+                      ] as typeof cfg.touchThreshold;
+                      arr[selectedPad] = Number(e.target.value);
+                      store.updateConfigLocal({ touchThreshold: arr });
+                    }}
+                  />
                   <span className="click-map-thresh-value">{thresh}</span>
                 </div>
-                <input
-                  type="range"
-                  className="click-map-thresh-slider"
-                  min={1}
+                <TouchBar
+                  label=""
+                  value={live}
+                  threshold={thresh}
                   max={TOUCH_BAR_MAX}
-                  step={1}
-                  value={thresh}
-                  onChange={(e) => {
-                    const arr = [
-                      ...cfg.touchThreshold,
-                    ] as typeof cfg.touchThreshold;
-                    arr[selectedPad] = Number(e.target.value);
-                    store.updateConfigLocal({ touchThreshold: arr });
-                  }}
+                  invert
                 />
                 <span
                   className={`click-map-thresh-live${scored ? " click-map-thresh-live--scored" : ""}`}
                 >
                   Live reading {live} —{" "}
-                  {scored ? "above threshold, registering as press" : "below threshold"}
+                  {scored ? "below threshold, registering as press" : "above threshold, not pressed"}
                 </span>
               </div>
             </div>
@@ -361,33 +280,41 @@ function TuneBody() {
           </div>
         </div>
       </Section>
+
+      {/* ── Controls (dead zone + debounce) ── */}
+      <section className="section tune-controls">
+        <div className="section-head">
+          <h2 className="section-title">Controls</h2>
+        </div>
+        <div className="card tune-controls-card">
+          <Slider
+            label="Dead zone"
+            min={0}
+            max={300}
+            step={1}
+            value={cfg.deadzoneMrad}
+            display={`${(cfg.deadzoneMrad / 1000).toFixed(3)} rad`}
+            onChange={(v) => store.updateConfigLocal({ deadzoneMrad: v })}
+          />
+          <Slider
+            label="Debounce"
+            min={5}
+            max={200}
+            step={1}
+            value={cfg.debounceMs}
+            display={`${cfg.debounceMs} ms`}
+            onChange={(v) => store.updateConfigLocal({ debounceMs: v })}
+          />
+        </div>
+      </section>
+
+      {/* ── Motion mix (sensitivity / fusion) ── */}
+      <MotionMix
+        cfg={cfg}
+        onChange={(patch: Partial<AgConfig>) => store.updateConfigLocal(patch)}
+        className="tune-mix"
+      />
     </>
   );
 }
 
-function ActionSelect({
-  value,
-  options,
-  onChange,
-}: {
-  value: ClickAction;
-  options: ClickAction[];
-  onChange: (a: ClickAction) => void;
-}) {
-  return (
-    <select
-      className="action-select"
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value) as ClickAction)}
-    >
-      {options.map((a) => (
-        <option key={a} value={a}>
-          {CLICK_ACTION_LABELS[a]}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-// Kept for any future use; suppresses unused-export lint without removing
-export { ActionSelect };

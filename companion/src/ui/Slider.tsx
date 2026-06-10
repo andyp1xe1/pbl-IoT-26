@@ -1,3 +1,5 @@
+import React from "react";
+
 export function Slider({
   label,
   value,
@@ -15,6 +17,7 @@ export function Slider({
   display: string;
   onChange: (v: number) => void;
 }) {
+  const pct = `${((value - min) / (max - min)) * 100}%`;
   return (
     <div className="slider-row">
       <div className="slider-head">
@@ -27,6 +30,7 @@ export function Slider({
         max={max}
         step={step}
         value={value}
+        style={{ "--pct": pct } as React.CSSProperties}
         onChange={(e) => onChange(Number(e.target.value))}
       />
     </div>

@@ -246,15 +246,15 @@ body {
   gap: 22px;
   grid-template-columns: 1fr;
   grid-template-areas:
+    "click"
     "controls"
-    "mix"
-    "buttons";
+    "mix";
   align-items: start;
 }
 
+.tune-click    { grid-area: click;    }
 .tune-controls { grid-area: controls; }
 .tune-mix      { grid-area: mix;      }
-.tune-buttons  { grid-area: buttons;  }
 
 @media (min-width: 900px) {
   .tune-layout {
@@ -371,53 +371,62 @@ body {
   padding: 0;
 }
 .mix-card > .mix-grid {
-  padding: 14px 22px 16px;
+  padding: 18px 22px 24px;
 }
 
-.mix-grid {
+/* Shared 3-column template used by both the col-head and each band's row grid */
+.mix-col-head,
+.mix-band-rows {
   display: grid;
   grid-template-columns: minmax(120px, 0.4fr) minmax(0, 1fr) minmax(0, 1fr);
   column-gap: 28px;
-  row-gap: 4px;
   align-items: center;
 }
 
-/* Sub-band header: groups the 9 axes into "Raw IMU" and "Fused" bands
- * so the wire-stable ordering reads as two named blocks instead of one
- * undifferentiated stack of nine. */
-.mix-grid-head {
-  display: contents;
+.mix-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
-.mix-grid-head .mix-col-label {
+
+/* Column header labels */
+.mix-col-head {
+  padding: 0 0 2px;  /* no horizontal padding — same column widths as band-rows */
+}
+.mix-col-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--muted);
-  padding-bottom: 6px;
-  align-self: end;
+  /* offset right by the bipolar value column (56px) + its gap (12px) so the
+     label centres over the slider track rather than the full column */
+  padding-right: 68px;
+}
+
+/* Band cards — each group in its own card */
+.mix-band {
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mix-band-header {
+  background: #eceefb;
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(94, 106, 210, 0.18);
 }
 
 .mix-group-label {
-  font-family: var(--font-display);
-  font-size: 13px;
+  font-family: var(--font-ui);
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--text);
+  letter-spacing: 0.07em;
+  color: #5e6ad2;
   text-transform: uppercase;
-  padding-bottom: 6px;
-}
-
-.mix-band-sep {
-  grid-column: 1 / -1;
-  height: 1px;
-  background: var(--border);
-  margin: 14px 0 4px;
-}
-
-.mix-grid-head-sub > .mix-group-label {
-  padding-top: 4px;
-  padding-bottom: 4px;
 }
 
 .mix-group-hint {
@@ -427,31 +436,30 @@ body {
   letter-spacing: 0.04em;
 }
 
+/* Fused band dims when Madgwick is off */
+.mix-band--dim {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.mix-band-rows {
+  padding: 0 0 6px; /* 6px bottom gap so last row breathes the same as the sides */
+}
+
 .mix-row {
   display: contents;
 }
 .mix-row > .mix-axis-label,
 .mix-row > .bipolar {
-  padding-block: 6px;
-  border-top: 1px solid var(--border);
-}
-/* First row in a band: no top border (the band header already separated). */
-.mix-row:first-of-type > .mix-axis-label,
-.mix-row:first-of-type > .bipolar,
-.mix-grid-head-sub + .mix-row > .mix-axis-label,
-.mix-grid-head-sub + .mix-row > .bipolar {
-  border-top: none;
+  padding-block: 8px;
+  padding-inline: 14px;
 }
 
 .mix-axis-label {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text);
-}
-
-.mix-row-dim .mix-axis-label,
-.mix-row-dim .bipolar {
-  opacity: 0.42;
+  align-self: center;
 }
 
 
@@ -521,9 +529,10 @@ body {
   bottom: 0;
   width: 100%;
   height: 100%;
+  background: transparent; /* override global fill gradient */
+  border-radius: 0;
   margin: 0;
   padding: 0;
-  background: transparent;
   -webkit-appearance: none;
   appearance: none;
   cursor: ew-resize;
@@ -550,6 +559,7 @@ body {
   background: var(--surface);
   border: 2px solid var(--accent);
   box-shadow: 0 1px 4px rgba(74, 92, 160, 0.20);
+  margin-top: 2px; /* center on 22px track: -(18/2 - 22/2) = +2px */
   cursor: ew-resize;
 }
 .bipolar input[type="range"]::-moz-range-thumb {
@@ -705,14 +715,20 @@ body {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.08);
-  transition: transform 180ms cubic-bezier(0.3, 0, 0.2, 1);
+  transition: transform 180ms cubic-bezier(0.3, 0, 0.2, 1), background 160ms ease;
+}
+.switch-off .switch-thumb {
+  background: #5e6ad2;
+  opacity: 0.55;
 }
 
 .switch-off {
-  background: rgba(121, 124, 147, 0.30);
+  background: #eceefb;
+  box-shadow: inset 0 0 0 1.5px rgba(94, 106, 210, 0.28);
 }
 .switch-off:hover:not(:disabled) {
-  background: rgba(121, 124, 147, 0.42);
+  background: #e2e5f8;
+  box-shadow: inset 0 0 0 1.5px rgba(94, 106, 210, 0.42);
 }
 
 .switch-on {
@@ -877,9 +893,53 @@ body {
   color: var(--accent);
 }
 
+/* Shared custom range input — all sliders use this; bipolar overrides below */
 input[type="range"] {
   width: 100%;
-  accent-color: var(--accent);
+  display: block;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  height: 9px;
+  border-radius: 5px;
+  background: linear-gradient(
+    to right,
+    #5e6ad2 var(--pct, 0%),
+    var(--border, #e3e6f1) var(--pct, 0%)
+  );
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 9px;
+  border-radius: 5px;
+  background: transparent;
+}
+input[type="range"]::-moz-range-track {
+  height: 9px;
+  border-radius: 5px;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #5e6ad2;
+  margin-top: -4.5px;
+  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.30);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: #5e6ad2;
+  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.30);
+}
+input[type="range"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ---------- Select (action picker) ---------- */
@@ -1519,8 +1579,8 @@ input[type="range"] {
 }
 
 .hand3d-tab--active {
-  background: rgba(94, 106, 210, 0.10);
-  border-color: #8b94e4;
+  background: #eceefb;
+  border-color: #5e6ad2;
   color: #5e6ad2;
   font-weight: 700;
 }
@@ -1768,14 +1828,7 @@ input[type="range"] {
 
 /* threshold sub-row */
 
-.click-map-thresh-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
+/* shared badge — sits to the right of both the slider row and the live bar */
 .click-map-thresh-value {
   font-size: 12px;
   font-weight: 700;
@@ -1785,13 +1838,22 @@ input[type="range"] {
   padding: 3px 10px;
   border-radius: 8px;
   flex-shrink: 0;
+  min-width: 44px;
+  text-align: center;
 }
 
+/* inline row: [track] [badge] — mirrors .touch-row layout */
+.click-map-thresh-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+/* Only layout overrides needed — track/thumb come from the global rule */
 .click-map-thresh-slider {
-  width: 100%;
-  accent-color: #5e6ad2;
-  margin: 0 0 6px;
-  display: block;
+  flex: 1;
+  margin: 0;
 }
 
 .click-map-thresh-live {
@@ -1803,4 +1865,35 @@ input[type="range"] {
 .click-map-thresh-live--scored {
   color: #5e6ad2;
   font-weight: 600;
+}
+
+/* TouchBar inside click-map threshold — matches the visual style of the
+ * threshold slider row above it (same badge, same track weight). */
+.click-map-field .touch-row {
+  padding: 6px 0 4px;
+  border: none;
+  gap: 10px;
+}
+.click-map-field .touch-label {
+  display: none;
+}
+.click-map-field .touch-value {
+  width: auto;
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #eceefb;
+  color: #5e6ad2;
+  padding: 3px 10px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.click-map-field .touch-track {
+  height: 9px;
+  border-radius: 5px;
+  border: none;
+  background: var(--border);
+  overflow: hidden;
 }

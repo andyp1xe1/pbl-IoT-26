@@ -1,3 +1,5 @@
+import React from "react";
+import { MousePointer } from "lucide-react";
 import { AgConfig, MIX_AXIS_LABELS, MixAxis, MixVector } from "../ble/types";
 import { BipolarSlider } from "./BipolarSlider";
 import { Switch } from "./Switch";
@@ -55,7 +57,7 @@ export function MotionMix({
         return FUSED_RANGE;
     }
   };
-  const betaPct = (cfg.madgwickBetaMilli / 300) * 100;
+  const betaPct = `${(cfg.madgwickBetaMilli / 300) * 100}%`;
 
   return (
     <section className={className ? `section motion-mix ${className}` : "section motion-mix"}>
@@ -74,7 +76,7 @@ export function MotionMix({
               value={cfg.madgwickBetaMilli}
               disabled={!cfg.madgwickEnabled}
               onChange={(e) => onChange({ madgwickBetaMilli: Number(e.target.value) })}
-              style={{ ["--beta-pct" as string]: `${betaPct}%` }}
+              style={{ "--pct": betaPct } as React.CSSProperties}
             />
             <span className="mix-beta-value">
               {(cfg.madgwickBetaMilli / 1000).toFixed(3)}
@@ -91,44 +93,61 @@ export function MotionMix({
         </header>
 
         <div className="mix-grid">
-          <div className="mix-grid-head">
-            <span className="mix-group-label">Raw IMU</span>
-            <span className="mix-col-label">→ Cursor X</span>
-            <span className="mix-col-label">→ Cursor Y</span>
-          </div>
-          {rawAxes.map((axis) => (
-            <MixRow
-              key={axis}
-              axis={axis}
-              x={cfg.mixX[axis]}
-              y={cfg.mixY[axis]}
-              range={rangeFor(axis)}
-              onChangeX={(v) => setWeight("x", axis, v)}
-              onChangeY={(v) => setWeight("y", axis, v)}
-            />
-          ))}
-
-          <div className="mix-band-sep" aria-hidden="true" />
-          <div className="mix-grid-head mix-grid-head-sub">
-            <span className="mix-group-label">
-              Fused
-              {!cfg.madgwickEnabled && <em className="mix-group-hint"> · disabled</em>}
+          {/* Column headers */}
+          <div className="mix-col-head">
+            <span />
+            <span className="mix-col-label">
+              <MousePointer size={11} strokeWidth={2.5} />
+              Cursor X
             </span>
-            <span />
-            <span />
+            <span className="mix-col-label">
+              <MousePointer size={11} strokeWidth={2.5} />
+              Cursor Y
+            </span>
           </div>
-          {fusedAxes.map((axis) => (
-            <MixRow
-              key={axis}
-              axis={axis}
-              x={cfg.mixX[axis]}
-              y={cfg.mixY[axis]}
-              range={rangeFor(axis)}
-              dim={!cfg.madgwickEnabled}
-              onChangeX={(v) => setWeight("x", axis, v)}
-              onChangeY={(v) => setWeight("y", axis, v)}
-            />
-          ))}
+
+          {/* RAW IMU band card */}
+          <div className="mix-band">
+            <div className="mix-band-header">
+              <span className="mix-group-label">Raw IMU</span>
+            </div>
+            <div className="mix-band-rows">
+              {rawAxes.map((axis) => (
+                <MixRow
+                  key={axis}
+                  axis={axis}
+                  x={cfg.mixX[axis]}
+                  y={cfg.mixY[axis]}
+                  range={rangeFor(axis)}
+                  onChangeX={(v) => setWeight("x", axis, v)}
+                  onChangeY={(v) => setWeight("y", axis, v)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* FUSED band card */}
+          <div className={`mix-band${!cfg.madgwickEnabled ? " mix-band--dim" : ""}`}>
+            <div className="mix-band-header">
+              <span className="mix-group-label">
+                Fused
+                {!cfg.madgwickEnabled && <em className="mix-group-hint"> · disabled</em>}
+              </span>
+            </div>
+            <div className="mix-band-rows">
+              {fusedAxes.map((axis) => (
+                <MixRow
+                  key={axis}
+                  axis={axis}
+                  x={cfg.mixX[axis]}
+                  y={cfg.mixY[axis]}
+                  range={rangeFor(axis)}
+                  onChangeX={(v) => setWeight("x", axis, v)}
+                  onChangeY={(v) => setWeight("y", axis, v)}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -140,7 +159,6 @@ function MixRow({
   x,
   y,
   range,
-  dim,
   onChangeX,
   onChangeY,
 }: {
@@ -148,13 +166,12 @@ function MixRow({
   x: number;
   y: number;
   range: { min: number; max: number; step: number };
-  dim?: boolean;
   onChangeX: (v: number) => void;
   onChangeY: (v: number) => void;
 }) {
   const label = MIX_AXIS_LABELS[axis].replace(" (fused)", "");
   return (
-    <div className={"mix-row" + (dim ? " mix-row-dim" : "")}>
+    <div className="mix-row">
       <span className="mix-axis-label">{label}</span>
       <BipolarSlider
         ariaLabel={`${label} contribution to cursor X`}
