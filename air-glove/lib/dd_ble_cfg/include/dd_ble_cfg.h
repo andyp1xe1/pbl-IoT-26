@@ -16,7 +16,7 @@
  *     Status    41470005  R/Notify 4-byte command status
  *
  * Public header exposes only logical structs — no NimBLE types leak (ADR-005).
- * MUST be initialised AFTER dd_ble_hid_init() so the NimBLE server exists.
+ * MUST be initialised AFTER dd_ble_hid_init_server() so the NimBLE server exists.
  */
 
 #include "ag_types.h"
@@ -65,6 +65,12 @@ typedef struct {
                                           rates as mix inputs                */
     int16_t  mix_x_milli[AG_MIX_COUNT]; /* per-axis weight into cursor dx    */
     int16_t  mix_y_milli[AG_MIX_COUNT]; /* per-axis weight into cursor dy    */
+    uint16_t wrist_roll_comp_milli;    /* wrist-roll compensation strength
+                                          ×1000 (0 = off, 1000 = full undo).
+                                          Pre-rotates the body-frame angular
+                                          increment by −φ·strength about
+                                          glove Y so cursor mapping stays
+                                          invariant to wrist twist.         */
 } dd_ble_cfg_t;
 
 /* One live telemetry frame pushed to the host. */
@@ -106,7 +112,7 @@ typedef struct {
 /* Register the service on the existing NimBLE server and seed config.
  * `defaults` is used only if no config has been persisted to NVS; pass NULL
  * to use built-in defaults. Returns AG_OK, or AG_ERR_* on failure.
- * Call once, from app_controller, AFTER dd_ble_hid_init(). */
+ * Call once, from app_controller, AFTER dd_ble_hid_init_server(). */
 ag_result_t dd_ble_cfg_init(const dd_ble_cfg_t *defaults);
 
 /* Copy the current (host-writable) config. Thread-safe. */

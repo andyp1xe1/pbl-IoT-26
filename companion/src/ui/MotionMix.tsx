@@ -30,13 +30,13 @@ export function MotionMix({
     onChange({ [key]: next } as Partial<AgConfig>);
   };
 
-  const rawAxes: MixAxis[] = [MixAxis.Gx, MixAxis.Gy, MixAxis.Gz, MixAxis.Ax, MixAxis.Ay, MixAxis.Az];
-  const fusedAxes: MixAxis[] = [MixAxis.Roll, MixAxis.Pitch, MixAxis.Yaw];
+  const rawAxes: MixAxis[] = [MixAxis.Gx, MixAxis.Gz, MixAxis.Ax, MixAxis.Az];
+  const fusedAxes: MixAxis[] = [MixAxis.Roll, MixAxis.Yaw];
   /* Per-lane slider ranges, sized to each signal's natural operating window
    * so one slider step is a comparable change across lanes.
    *
-   *   Gyro X/Y/Z  — rad/s, wrist peak ~3–5. ±0.5 weight gives ±2.5 contribution.
-   *   Accel X/Y/Z — m/s² with a ~9.8 gravity DC. Range left at the legacy ±2.0
+   *   Gyro X/Z    — rad/s, wrist peak ~3–5. ±0.5 weight gives ±2.5 contribution.
+   *   Accel X/Z   — m/s² with a ~9.8 gravity DC. Range left at the legacy ±2.0
    *                 until linear-accel (gravity subtraction) lands; current
    *                 lanes are usable only for spike-style mixing.
    *   Fused rates — rad per 10 ms frame, peak ~0.05. ±2.0 weight gives ±0.1. */
@@ -46,11 +46,9 @@ export function MotionMix({
   const rangeFor = (axis: MixAxis) => {
     switch (axis) {
       case MixAxis.Gx:
-      case MixAxis.Gy:
       case MixAxis.Gz:
         return RAW_GYRO_RANGE;
       case MixAxis.Ax:
-      case MixAxis.Ay:
       case MixAxis.Az:
         return ACCEL_RANGE;
       default:
@@ -58,6 +56,7 @@ export function MotionMix({
     }
   };
   const betaPct = `${(cfg.madgwickBetaMilli / 300) * 100}%`;
+  const wristCompPct = `${(cfg.wristRollCompMilli / 1000) * 100}%`;
 
   return (
     <section className={className ? `section motion-mix ${className}` : "section motion-mix"}>
@@ -80,6 +79,21 @@ export function MotionMix({
             />
             <span className="mix-beta-value">
               {(cfg.madgwickBetaMilli / 1000).toFixed(3)}
+            </span>
+          </div>
+          <div className="mix-beta-inline">
+            <span className="mix-beta-label">Wrist-roll comp</span>
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              step={10}
+              value={cfg.wristRollCompMilli}
+              onChange={(e) => onChange({ wristRollCompMilli: Number(e.target.value) })}
+              style={{ "--pct": wristCompPct } as React.CSSProperties}
+            />
+            <span className="mix-beta-value">
+              {(cfg.wristRollCompMilli / 1000).toFixed(2)}
             </span>
           </div>
           <label className="motion-mix-toggle">

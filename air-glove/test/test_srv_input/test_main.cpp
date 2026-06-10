@@ -178,40 +178,6 @@ static void test_out_cap_zero_never_writes(void)
     }
 }
 
-/* 8. Reset during a pending RISING discards the transition — no PRESS fires
- *    from the pre-reset high sample. */
-static void test_reset_returns_to_idle(void)
-{
-    input_event_t out[8];
-    size_t        out_len = 0;
-
-    /* One tick of INDEX high: enters RISING, no event yet. */
-    touch_sample_t s1 = make_touch((uint8_t)(1u << TOUCH_PAD_INDEX), tick_us(0));
-    srv_input_process(&s1, out, 8, &out_len);
-    TEST_ASSERT_EQUAL_INT(0, (int)out_len);
-
-    srv_input_reset();
-
-    /* Low sample after reset: IDLE + low → IDLE, no event. */
-    touch_sample_t s2 = make_touch(0, tick_us(1));
-    out_len = 0;
-    srv_input_process(&s2, out, 8, &out_len);
-    TEST_ASSERT_EQUAL_INT(0, (int)out_len);
-
-    /* Feed two high ticks — should still debounce normally after reset. */
-    touch_sample_t s3 = make_touch((uint8_t)(1u << TOUCH_PAD_INDEX), tick_us(2));
-    out_len = 0;
-    srv_input_process(&s3, out, 8, &out_len);
-    TEST_ASSERT_EQUAL_INT(0, (int)out_len);           /* 1st high: RISING */
-
-    touch_sample_t s4 = make_touch((uint8_t)(1u << TOUCH_PAD_INDEX), tick_us(3));
-    out_len = 0;
-    srv_input_process(&s4, out, 8, &out_len);
-    TEST_ASSERT_EQUAL_INT(1, (int)out_len);           /* 2nd high: PRESS */
-    TEST_ASSERT_EQUAL_INT(INPUT_EVT_PRESS, (int)out[0].kind);
-    TEST_ASSERT_EQUAL_INT(TOUCH_PAD_INDEX, (int)out[0].pad);
-}
-
 /* ── Entry point ──────────────────────────────────────────────────────── */
 
 int main(int argc, char **argv)
@@ -225,6 +191,5 @@ int main(int argc, char **argv)
     RUN_TEST(test_release_fires_once);
     RUN_TEST(test_two_pads_simultaneous_press_within_30ms);
     RUN_TEST(test_out_cap_zero_never_writes);
-    RUN_TEST(test_reset_returns_to_idle);
     return UNITY_END();
 }

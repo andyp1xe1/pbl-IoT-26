@@ -11,16 +11,16 @@ extern "C" {
  * baseline per pad (assumes fingers are not in contact at init). */
 ag_result_t dd_touch_init(void);
 
-/* Re-run the capacitive baseline calibration at runtime.  Call when the
- * glove is flat on a table with no finger contact.  Thread-safety: the
- * brief window during which s_threshold is being updated is benign — the
- * worst case is one missed or extra touch detection on t_touch's next tick.
- * No-op (returns AG_ERR_STATE) if dd_touch_init() has not been called. */
-ag_result_t dd_touch_recalibrate(void);
-
 /* Read all four pads into one sample. `touched_mask` reflects current
  * thresholded state. */
 ag_result_t dd_touch_read(touch_sample_t *out);
+
+/* Per-pad capacitive baseline (counts). Button pads carry a meaningless 0.
+ * Setter applies immediately and recomputes thresholds; save persists to NVS
+ * so the next boot starts from the calibrated value instead of the bench
+ * sample. EMA self-recalibration keeps running on top regardless. */
+void        dd_touch_set_baselines (const uint16_t bl[TOUCH_PAD_COUNT]);
+ag_result_t dd_touch_save_baselines(void);
 
 #ifdef __cplusplus
 }

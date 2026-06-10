@@ -50,10 +50,6 @@ ag_result_t srv_fusion_init(float beta);
  * identity in that case). */
 ag_result_t srv_fusion_update(const imu_sample_t *s, quat_t *out);
 
-/* Reset the internal quaternion to identity (1, 0, 0, 0) without changing
- * the stored beta or the previous-timestamp register. */
-void srv_fusion_reset(void);
-
 #ifdef __cplusplus
 }
 #endif

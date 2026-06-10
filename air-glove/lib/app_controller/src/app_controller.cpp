@@ -41,8 +41,15 @@ std::atomic<int16_t>  g_tele_accel_mg[3]  = {};
 std::atomic<int16_t>  g_tele_gyro_mdps[3] = {};
 std::atomic<uint16_t> g_tele_touch_raw[4] = {};
 
-/* ── Gyro bias (definitions; declared in tasks.h) ───────────────────────── */
-std::atomic<int16_t>  g_gyro_bias_mdps[3] = {};
+/* ── Gyro-bias calibration shared state (declared in tasks.h) ──────────── */
+std::atomic<bool>     g_gyro_cal_running{false};
+std::atomic<uint32_t> g_gyro_cal_count{0};
+std::atomic<int64_t>  g_gyro_cal_sum[3] = {};
+
+/* ── Touch-baseline calibration shared state (declared in tasks.h) ─────── */
+std::atomic<bool>     g_touch_cal_running{false};
+std::atomic<uint32_t> g_touch_cal_count{0};
+std::atomic<uint32_t> g_touch_cal_sum[4] = {};
 
 /* ── File-scope helpers ────────────────────────────────────────────────── */
 namespace {
@@ -66,10 +73,10 @@ static TimerHandle_t s_heartbeat_timer = nullptr;
 /* Boot-time motion mapping: must mirror dd_ble_cfg::kBuiltinDefaults so the
  * "Air Glove just powered on" cursor behaviour matches what the companion
  * will read back from NVS once t_motion picks up the persisted config.
- * Pitch/Roll fused do the bulk; small raw gyro feed-forward adds snap. */
+ * Signal order: { GX, GZ, AX, AZ, ROLL, YAW } per AG_MIX_*. */
 static const motion_config_t kDefaultMotionCfg = {
-    /* mix_x_milli  */ { 0, +50, 0, 0, 0, 0,     0, +1000, 0 },
-    /* mix_y_milli  */ { +50, 0, 0, 0, 0, 0, +1000,     0, 0 },
+    /* mix_x_milli  */ {   0,  -50, 0, 0,     0, -1000 },
+    /* mix_y_milli  */ { +50,    0, 0, 0, +1000,     0 },
     /* sens_x_milli */ 1000,
     /* sens_y_milli */ 1000,
     /* deadzone_rad */ 0.015f,

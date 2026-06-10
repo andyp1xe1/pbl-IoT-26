@@ -185,12 +185,6 @@ extern "C" ag_result_t dd_ble_hid_start(void) {
     return AG_OK;
 }
 
-extern "C" ag_result_t dd_ble_hid_init(const char *device_name) {
-    ag_result_t rc = dd_ble_hid_init_server(device_name);
-    if (rc != AG_OK) return rc;
-    return dd_ble_hid_start();
-}
-
 extern "C" ag_result_t dd_ble_hid_send(const hid_mouse_report_t *r) {
     if (r == nullptr)        return AG_ERR_ARG;
     if (!s_initialized)      return AG_ERR_STATE;

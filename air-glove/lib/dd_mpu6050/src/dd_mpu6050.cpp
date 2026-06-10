@@ -11,8 +11,10 @@
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <Preferences.h>
 #include <esp_timer.h>
 #include <math.h>
+#include <string.h>
 
 #include "dd_mpu6050.h"
 #include "mpu6050_regs.h"
@@ -24,9 +26,17 @@ constexpr float kGravity   = 9.80665f;                  /* m/s^2 per g          
 constexpr float kDegToRad  = 0.017453292519943295f;     /* pi / 180             */
 constexpr uint8_t kBurstLen = 14;                       /* accel(6) + temp(2) + gyro(6) */
 
+constexpr char kNvsNamespace[] = "mpu6050";
+constexpr char kNvsBiasKey[]   = "gyro_bias";
+
 static float s_accel_scale_mps2 = 0.0f;
 static float s_gyro_scale_rads  = 0.0f;
 static bool  s_initialized      = false;
+
+/* Body-frame gyro bias, rad/s. Subtracted from each read's gx/gy/gz after
+ * remap. Lives here (not in s_initialized's setup) so a runtime calibration
+ * via dd_mpu6050_set_gyro_bias() takes effect immediately. */
+static float s_gyro_bias[3] = {0.0f, 0.0f, 0.0f};
 
 static ag_result_t write_reg(uint8_t reg, uint8_t val) {
     Wire.beginTransmission(MPU6050_I2C_ADDR);
@@ -72,6 +82,23 @@ extern "C" ag_result_t dd_mpu6050_init(void) {
     /* Precompute "raw int16 → SI unit" scale factors. */
     s_accel_scale_mps2 = kGravity / 8192.0f;
     s_gyro_scale_rads  = kDegToRad / 65.5f;
+
+    /* Restore persisted gyro bias if a calibration was saved previously. */
+    {
+        Preferences prefs;
+        if (prefs.begin(kNvsNamespace, /*readOnly=*/true)) {
+            float buf[3];
+            size_t got = prefs.getBytes(kNvsBiasKey, buf, sizeof(buf));
+            if (got == sizeof(buf) && isfinite(buf[0]) && isfinite(buf[1]) && isfinite(buf[2])) {
+                memcpy(s_gyro_bias, buf, sizeof(buf));
+                printf("[dd_mpu6050] loaded gyro bias from NVS: "
+                       "bx=%.4f by=%.4f bz=%.4f rad/s\n",
+                       (double)s_gyro_bias[0], (double)s_gyro_bias[1],
+                       (double)s_gyro_bias[2]);
+            }
+            prefs.end();
+        }
+    }
 
     s_initialized = true;
     printf("[dd_mpu6050] WHO_AM_I=0x%02X  accel=+/-4g  gyro=+/-500dps  DLPF=188Hz  I2C=400kHz\n",
@@ -131,12 +158,32 @@ extern "C" ag_result_t dd_mpu6050_read(imu_sample_t *out) {
     out->ax   =  ay_b;
     out->ay   = -ax_b;
     out->az   =  az_b;
-    out->gx   =  gy_b;
-    out->gy   = -gx_b;
-    out->gz   =  gz_b;
+    out->gx   =  gy_b - s_gyro_bias[0];
+    out->gy   = -gx_b - s_gyro_bias[1];
+    out->gz   =  gz_b - s_gyro_bias[2];
     out->t_us = (uint64_t)esp_timer_get_time();
 
     return AG_OK;
+}
+
+extern "C" void dd_mpu6050_set_gyro_bias(float bx, float by, float bz) {
+    s_gyro_bias[0] = isfinite(bx) ? bx : 0.0f;
+    s_gyro_bias[1] = isfinite(by) ? by : 0.0f;
+    s_gyro_bias[2] = isfinite(bz) ? bz : 0.0f;
+}
+
+extern "C" void dd_mpu6050_get_gyro_bias(float *bx, float *by, float *bz) {
+    if (bx) *bx = s_gyro_bias[0];
+    if (by) *by = s_gyro_bias[1];
+    if (bz) *bz = s_gyro_bias[2];
+}
+
+extern "C" ag_result_t dd_mpu6050_save_gyro_bias(void) {
+    Preferences prefs;
+    if (!prefs.begin(kNvsNamespace, /*readOnly=*/false)) return AG_ERR_IO;
+    size_t wrote = prefs.putBytes(kNvsBiasKey, s_gyro_bias, sizeof(s_gyro_bias));
+    prefs.end();
+    return (wrote == sizeof(s_gyro_bias)) ? AG_OK : AG_ERR_IO;
 }
 
 extern "C" ag_result_t dd_mpu6050_set_sleep(bool sleeping) {

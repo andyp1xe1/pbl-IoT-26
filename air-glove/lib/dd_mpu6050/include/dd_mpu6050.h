@@ -22,6 +22,17 @@ ag_result_t dd_mpu6050_read(imu_sample_t *out);
  * serialise with dd_mpu6050_read() (same task). */
 ag_result_t dd_mpu6050_set_sleep(bool sleeping);
 
+/* Gyro bias correction (body-frame, rad/s). Subtracted from every
+ * dd_mpu6050_read() result after the axis remap. Loaded from NVS at init and
+ * applied immediately; callers can update it at runtime (e.g. after a hold-
+ * still calibration) and optionally persist it.
+ *
+ * Storage is body-frame (post-remap) so a calibration captures whatever the
+ * caller sees on the output — re-calibrate if the axis remap ever changes. */
+void        dd_mpu6050_set_gyro_bias (float bx, float by, float bz);
+void        dd_mpu6050_get_gyro_bias (float *bx, float *by, float *bz);
+ag_result_t dd_mpu6050_save_gyro_bias(void);
+
 #ifdef __cplusplus
 }
 #endif

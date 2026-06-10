@@ -17,13 +17,18 @@
  */
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include <esp_timer.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "dd_touch.h"
 #include "ag_pins.h"
 
 namespace {
+
+constexpr char kNvsNamespace[]  = "touch";
+constexpr char kNvsBaselineKey[] = "baselines";
 
 /* GPIO per `touch_pad_id_t` — indices MUST align with the enum. */
 static const uint8_t kGpio[TOUCH_PAD_COUNT] = { 4, 14, 15, 13 };
@@ -53,20 +58,6 @@ static inline bool is_button(uint8_t i) {
     return (kButtonMask & (uint8_t)(1u << i)) != 0;
 }
 
-/* Sample one capacitive pad kCalibSamples times and update its baseline +
- * threshold.  Caller must ensure no finger is touching the pad.  Runs in
- * ~10 ms (50 × 200 µs).  Safe to call from any task; the 16-bit writes to
- * s_baseline / s_threshold are word-aligned and effectively atomic on ESP32. */
-static void calibrate_cap_pad(uint8_t i) {
-    uint32_t sum = 0;
-    for (uint8_t s = 0; s < kCalibSamples; ++s) {
-        sum += (uint16_t)touchRead(kGpio[i]);
-        delayMicroseconds(200);
-    }
-    s_baseline [i] = (uint16_t)(sum / kCalibSamples);
-    s_threshold[i] = apply_ratio(s_baseline[i]);
-}
-
 } /* namespace */
 
 extern "C" ag_result_t dd_touch_init(void) {
@@ -80,21 +71,54 @@ extern "C" ag_result_t dd_touch_init(void) {
         }
     }
 
-    /* Capacitive calibration: prime the peripheral first — first reading
-     * after boot is often 0. */
+    /* Capacitive calibration for non-button pads (THUMB only).
+     * Prime the peripheral first — first reading after boot is often 0. */
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
-        if (!is_button(i)) (void)touchRead(kGpio[i]);
+        if (!is_button(i)) {
+            (void)touchRead(kGpio[i]);
+        }
     }
     delay(10);
 
     bool cap_wiring_ok = true;
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
         if (is_button(i)) continue;
-        calibrate_cap_pad(i);
+
+        uint32_t sum = 0;
+        for (uint8_t s = 0; s < kCalibSamples; ++s) {
+            sum += (uint16_t)touchRead(kGpio[i]);
+            delayMicroseconds(200);
+        }
+        s_baseline [i] = (uint16_t)(sum / kCalibSamples);
+        s_threshold[i] = apply_ratio(s_baseline[i]);
+
         if (s_baseline[i] < 20) {
             printf("[dd_touch] WARN: capacitive pad %u baseline=%u is too low — "
                    "check wire on GPIO%u\n", i, s_baseline[i], kGpio[i]);
             cap_wiring_ok = false;
+        }
+    }
+
+    /* Override the sampled baselines with persisted ones if a saved
+     * calibration is available. The bench sample at boot is only a fallback
+     * for the first boot before the user ever calibrates. */
+    {
+        Preferences prefs;
+        if (prefs.begin(kNvsNamespace, /*readOnly=*/true)) {
+            uint16_t buf[TOUCH_PAD_COUNT];
+            size_t got = prefs.getBytes(kNvsBaselineKey, buf, sizeof(buf));
+            if (got == sizeof(buf)) {
+                for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
+                    if (is_button(i)) continue;
+                    if (buf[i] >= 20) {
+                        s_baseline [i] = buf[i];
+                        s_threshold[i] = apply_ratio(buf[i]);
+                    }
+                }
+                printf("[dd_touch] loaded baselines from NVS: thumb=%u\n",
+                       s_baseline[TOUCH_PAD_THUMB]);
+            }
+            prefs.end();
         }
     }
 
@@ -108,20 +132,22 @@ extern "C" ag_result_t dd_touch_init(void) {
     return AG_OK;
 }
 
-extern "C" ag_result_t dd_touch_recalibrate(void) {
-    if (!s_initialized) return AG_ERR_STATE;
-
-    bool wiring_ok = true;
+extern "C" void dd_touch_set_baselines(const uint16_t bl[TOUCH_PAD_COUNT]) {
+    if (bl == nullptr) return;
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
         if (is_button(i)) continue;
-        calibrate_cap_pad(i);
-        if (s_baseline[i] < 20) wiring_ok = false;
-        printf("[dd_touch] recal pad %u: baseline=%u threshold=%u\n",
-               i, s_baseline[i], s_threshold[i]);
+        if (bl[i] < 20) continue;   /* refuse implausible values silently */
+        s_baseline [i] = bl[i];
+        s_threshold[i] = apply_ratio(bl[i]);
     }
+}
 
-    printf("[dd_touch] recalibrate %s\n", wiring_ok ? "OK" : "WARN low baseline");
-    return wiring_ok ? AG_OK : AG_ERR_IO;
+extern "C" ag_result_t dd_touch_save_baselines(void) {
+    Preferences prefs;
+    if (!prefs.begin(kNvsNamespace, /*readOnly=*/false)) return AG_ERR_IO;
+    size_t wrote = prefs.putBytes(kNvsBaselineKey, s_baseline, sizeof(s_baseline));
+    prefs.end();
+    return (wrote == sizeof(s_baseline)) ? AG_OK : AG_ERR_IO;
 }
 
 extern "C" ag_result_t dd_touch_read(touch_sample_t *out) {

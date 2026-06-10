@@ -29,12 +29,6 @@ extern "C" ag_result_t srv_fusion_init(float beta)
     return AG_OK;
 }
 
-extern "C" void srv_fusion_reset(void)
-{
-    s_q = {1.0f, 0.0f, 0.0f, 0.0f};
-    /* s_beta and s_prev_t_us are intentionally preserved */
-}
-
 extern "C" ag_result_t srv_fusion_update(const imu_sample_t *s, quat_t *out)
 {
     if (!s || !out) {

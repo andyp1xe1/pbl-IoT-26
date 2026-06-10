@@ -9,16 +9,16 @@ import {
 import {
   AgConfig,
   ClickAction,
-  CONFIG_VERSION_V3,
+  CONFIG_VERSION_V4,
   defaultConfig,
   NO_MODIFIER,
   StatusState,
 } from "./types";
 
-describe("config codec (v3)", () => {
+describe("config codec (v4)", () => {
   it("round-trips a populated config", () => {
     const cfg: AgConfig = {
-      version: CONFIG_VERSION_V3,
+      version: CONFIG_VERSION_V4,
       flags: 0,
       sensXMilli: 1400,
       sensYMilli: 1200,
@@ -35,8 +35,9 @@ describe("config codec (v3)", () => {
       modifierPad: 0,
       clickActionAlt: [ClickAction.None, ClickAction.ScrollDown, ClickAction.Middle],
       madgwickEnabled: true,
-      mixX: [0, 0, 0, 0, 0, 0, 0, 1000, -1000],
-      mixY: [0, 0, 0, 0, 0, 0, -1700, 0, 0],
+      mixX: [0, 0, 0, 0, 1000, -1000],
+      mixY: [0, 0, 0, 0, -1700, 0],
+      wristRollCompMilli: 750,
     };
     const dv = new DataView(encodeConfig(cfg).buffer);
     expect(decodeConfig(dv)).toEqual(cfg);
@@ -44,28 +45,37 @@ describe("config codec (v3)", () => {
 
   it("round-trips arbitrary mix-matrix weights (incl. negatives)", () => {
     const cfg = defaultConfig();
-    cfg.mixX = [+500, -500, +1500, -1500, +2000, -2000, 0, +123, -123];
-    cfg.mixY = [-1, +1, +0, +777, -777, +1999, -1999, 0, 0];
+    cfg.mixX = [+500, -500, +1500, -1500, +2000, -2000];
+    cfg.mixY = [-1, +1, +0, +777, -777, +1999];
     cfg.madgwickEnabled = false;
+    cfg.wristRollCompMilli = 0;
     const dv = new DataView(encodeConfig(cfg).buffer);
     const back = decodeConfig(dv);
     expect(back.mixX).toEqual(cfg.mixX);
     expect(back.mixY).toEqual(cfg.mixY);
     expect(back.madgwickEnabled).toBe(false);
+    expect(back.wristRollCompMilli).toBe(0);
   });
 
   it("clamps out-of-range mix weights to ±2000", () => {
     const cfg = defaultConfig();
-    cfg.mixX = [99999, -99999, 0, 0, 0, 0, 0, 0, 0];
+    cfg.mixX = [99999, -99999, 0, 0, 0, 0];
     const dv = new DataView(encodeConfig(cfg).buffer);
     const back = decodeConfig(dv);
     expect(back.mixX[0]).toBe(2000);
     expect(back.mixX[1]).toBe(-2000);
   });
 
-  it("emits the v3 version byte", () => {
+  it("clamps wrist-roll compensation to [0, 1000]", () => {
+    const cfg = defaultConfig();
+    cfg.wristRollCompMilli = 99999;
+    const dv = new DataView(encodeConfig(cfg).buffer);
+    expect(decodeConfig(dv).wristRollCompMilli).toBe(1000);
+  });
+
+  it("emits the v4 version byte", () => {
     const bytes = encodeConfig(defaultConfig());
-    expect(bytes[0]).toBe(CONFIG_VERSION_V3);
+    expect(bytes[0]).toBe(CONFIG_VERSION_V4);
     expect(bytes.length).toBe(CONFIG_SIZE);
   });
 

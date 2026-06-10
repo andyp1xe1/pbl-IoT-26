@@ -166,6 +166,16 @@ void t_imu_sample_fn(void *)
             g_tele_gyro_mdps[0].store(sat_i16(s.gx * 57295.7795f));
             g_tele_gyro_mdps[1].store(sat_i16(s.gy * 57295.7795f));
             g_tele_gyro_mdps[2].store(sat_i16(s.gz * 57295.7795f));
+
+            /* Gyro-bias calibration accumulator. Fixed-point milli-rad/s × 1024
+             * preserves enough resolution to bias-correct a ~10 mrad/s bias
+             * accurately after averaging ~300 samples. */
+            if (g_gyro_cal_running.load(std::memory_order_acquire)) {
+                g_gyro_cal_sum[0].fetch_add((int64_t)(s.gx * 1024000.0f));
+                g_gyro_cal_sum[1].fetch_add((int64_t)(s.gy * 1024000.0f));
+                g_gyro_cal_sum[2].fetch_add((int64_t)(s.gz * 1024000.0f));
+                g_gyro_cal_count.fetch_add(1u);
+            }
         } else {
             printf("[imu] read error rc=%d\n", rc);
         }
@@ -240,6 +250,18 @@ void t_touch_fn(void *)
                 g_tele_touch_raw[i].store(s.raw[i]);
             }
 
+            /* Touch-baseline calibration accumulator. Sum raw cap-pad reads
+             * for all capacitive pads while the running flag is set; t_cfg
+             * averages and applies when sampling finishes. Button pads
+             * contribute their meaningless 0/4095 read — t_cfg ignores those
+             * indices via dd_touch_set_baselines (which is_button-gated). */
+            if (g_touch_cal_running.load(std::memory_order_acquire)) {
+                for (int i = 0; i < TOUCH_PAD_COUNT && i < 4; ++i) {
+                    g_touch_cal_sum[i].fetch_add((uint32_t)s.raw[i]);
+                }
+                g_touch_cal_count.fetch_add(1u);
+            }
+
             /* Edge-triggered raw log: print as soon as ANY pad changes
              * meaningfully (button: any flip, cap: ≥20 count delta), so
              * bench-testing bare wires gives instant feedback instead of
@@ -306,6 +328,7 @@ void t_motion_fn(void *)
     bool     madgwick_on        = true;
     bool     has_prev_q         = false;
     quat_t   prev_q             = { 1.0f, 0.0f, 0.0f, 0.0f };
+    float    wrist_comp_strength = 1.0f;   /* 0..1, set from cfg on apply */
 
     for (;;) {
         oriented_frame_t f;
@@ -324,33 +347,60 @@ void t_motion_fn(void *)
             dd_ble_cfg_get_config(&c);
             motion_config_t mc = motion_from_cfg(&c);
             srv_motion_init(&mc);
-            madgwick_on = (c.madgwick_enabled != 0);
+            madgwick_on         = (c.madgwick_enabled != 0);
+            wrist_comp_strength = (float)c.wrist_roll_comp_milli * 0.001f;
             applied_cfg_version = cfg_version;
-            printf("[motion] applied config v%u: madgwick=%u sens=[%u,%u] dz=%.4f\n",
+            printf("[motion] applied config v%u: madgwick=%u sens=[%u,%u] dz=%.4f comp=%.3f\n",
                    (unsigned)cfg_version, (unsigned)madgwick_on,
-                   c.sens_x_milli, c.sens_y_milli, (double)mc.deadzone_rad);
+                   c.sens_x_milli, c.sens_y_milli, (double)mc.deadzone_rad,
+                   (double)wrist_comp_strength);
         }
 
-        /* Build the 9-axis signal vector: raw IMU snapshots minus the
-         * calibrated zero-rate bias (zero until CMD_CALIBRATE_IMU runs). */
+        /* Build the 6-axis cursor signal vector. Wrist-twist lanes (GY/AY,
+         * and the body-Y rotation rate) are intentionally absent — they're
+         * non-gesture and decoupled from cursor motion entirely. */
+        const float gx_raw = (float)g_tele_gyro_mdps[0].load() * 1e-3f * kDegToRad;
+        const float gz_raw = (float)g_tele_gyro_mdps[2].load() * 1e-3f * kDegToRad;
+        const float ax_raw = (float)g_tele_accel_mg[0].load()  * 1e-3f * 9.80665f;
+        const float az_raw = (float)g_tele_accel_mg[2].load()  * 1e-3f * 9.80665f;
+
+        /* Wrist-roll compensation. φ = wrist-twist angle about glove Y
+         * (extracted from where world-up lands in the body XZ plane).
+         * The current body frame is rotated by +φ about Y relative to
+         * neutral, so a vector expressed in current-body components is
+         * mapped to neutral-body components by applying R(+φ) about Y.
+         * strength scales φ: 0 → no compensation; 1 → full undo.
+         *
+         * Runs every frame, independent of the Madgwick toggle: t_fusion
+         * always produces a valid q regardless of `madgwick_enabled`, and
+         * the raw GX/GZ/AX/AZ lanes need compensation just as much as the
+         * fused lanes do. Madgwick toggle only gates the fused ROLL/YAW
+         * signals (pure-raw-IMU mode for experimentation). */
+        const float qw = f.q.q0, qx = f.q.q1, qy = f.q.q2, qz = f.q.q3;
+        const float phi = atan2f(2.0f * (qw*qy - qx*qz),
+                                 1.0f - 2.0f * (qx*qx + qy*qy));
+        const float theta = phi * wrist_comp_strength;
+        const float cs    = cosf(theta);
+        const float sn    = sinf(theta);
+
         float signals[AG_MIX_COUNT];
-        signals[AG_MIX_GX] = (float)(g_tele_gyro_mdps[0].load() - g_gyro_bias_mdps[0].load()) * 1e-3f * kDegToRad;
-        signals[AG_MIX_GY] = (float)(g_tele_gyro_mdps[1].load() - g_gyro_bias_mdps[1].load()) * 1e-3f * kDegToRad;
-        signals[AG_MIX_GZ] = (float)(g_tele_gyro_mdps[2].load() - g_gyro_bias_mdps[2].load()) * 1e-3f * kDegToRad;
-        signals[AG_MIX_AX] = (float)g_tele_accel_mg[0].load()  * 1e-3f * 9.80665f;
-        signals[AG_MIX_AY] = (float)g_tele_accel_mg[1].load()  * 1e-3f * 9.80665f;
-        signals[AG_MIX_AZ] = (float)g_tele_accel_mg[2].load()  * 1e-3f * 9.80665f;
+        signals[AG_MIX_GX] =  cs * gx_raw + sn * gz_raw;
+        signals[AG_MIX_GZ] = -sn * gx_raw + cs * gz_raw;
+        signals[AG_MIX_AX] =  cs * ax_raw + sn * az_raw;
+        signals[AG_MIX_AZ] = -sn * ax_raw + cs * az_raw;
 
         if (madgwick_on && has_prev_q) {
-            /* q_delta = prev_q^-1 ⊗ f.q. Unit quat inverse = conjugate.
-             * 2 · vector(q_delta) ≈ rotation-vector in body frame, per frame. */
+            /* Body-frame quaternion delta: q_delta = prev_q^-1 ⊗ f.q.
+             * 2·vector(q_delta) ≈ rotation-vector in the previous body frame. */
             const float p0 =  prev_q.q0, p1 = -prev_q.q1, p2 = -prev_q.q2, p3 = -prev_q.q3;
             const float c0 = f.q.q0,    c1 = f.q.q1,    c2 = f.q.q2,    c3 = f.q.q3;
-            signals[AG_MIX_ROLL]  = 2.0f * (p0*c1 + p1*c0 + p2*c3 - p3*c2);
-            signals[AG_MIX_PITCH] = 2.0f * (p0*c2 - p1*c3 + p2*c0 + p3*c1);
-            signals[AG_MIX_YAW]   = 2.0f * (p0*c3 + p1*c2 - p2*c1 + p3*c0);
+            const float vx_b = 2.0f * (p0*c1 + p1*c0 + p2*c3 - p3*c2);
+            const float vz_b = 2.0f * (p0*c3 + p1*c2 - p2*c1 + p3*c0);
+            /* (vy_b — rotation about glove Y = wrist twist — is discarded.) */
+            signals[AG_MIX_ROLL] =  cs * vx_b + sn * vz_b;
+            signals[AG_MIX_YAW]  = -sn * vx_b + cs * vz_b;
         } else {
-            signals[AG_MIX_ROLL] = signals[AG_MIX_PITCH] = signals[AG_MIX_YAW] = 0.0f;
+            signals[AG_MIX_ROLL] = signals[AG_MIX_YAW] = 0.0f;
         }
         prev_q     = f.q;
         has_prev_q = true;
@@ -572,41 +622,94 @@ void t_cfg_fn(void *)
                 dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
                 break;
             case DD_BLE_CFG_CMD_RECAL_TOUCH: {
-                /* Re-sample the capacitive baseline with the glove flat and
-                 * untouched.  dd_touch_recalibrate() runs ~10 ms per pad. */
+                /* Hold-no-touch baseline calibration. Same pattern as the gyro
+                 * cal: reset accumulator, set running flag, t_touch contributes
+                 * raw pad reads at 100 Hz, average to per-pad baseline. */
+                constexpr uint32_t kSamples = 300;
+                if (g_sleeping.load()) {
+                    dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_FAIL, 0);
+                    printf("[cfg] touch cal refused: device sleeping\n");
+                    break;
+                }
+                for (int i = 0; i < 4; ++i) g_touch_cal_sum[i].store(0);
+                g_touch_cal_count.store(0);
+                g_touch_cal_running.store(true, std::memory_order_release);
                 dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING, 0);
-                ag_result_t rc = dd_touch_recalibrate();
+
+                uint32_t got = 0;
+                while ((got = g_touch_cal_count.load()) < kSamples) {
+                    uint8_t pct = (uint8_t)((got * 100u) / kSamples);
+                    dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING, pct);
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+                g_touch_cal_running.store(false, std::memory_order_release);
+
+                const uint32_t n = g_touch_cal_count.load();
+                uint16_t bl[TOUCH_PAD_COUNT] = {0, 0, 0, 0};
+                for (int i = 0; i < TOUCH_PAD_COUNT && i < 4; ++i) {
+                    bl[i] = (uint16_t)(g_touch_cal_sum[i].load() / n);
+                }
+                dd_touch_set_baselines(bl);
+                ag_result_t save_rc = dd_touch_save_baselines();
+                printf("[cfg] touch cal: n=%u thumb_baseline=%u save=%d\n",
+                       (unsigned)n, bl[TOUCH_PAD_THUMB], (int)save_rc);
                 dd_ble_cfg_set_status(
                     op,
-                    rc == AG_OK ? DD_BLE_CFG_ST_SUCCESS : DD_BLE_CFG_ST_FAIL,
+                    save_rc == AG_OK ? DD_BLE_CFG_ST_SUCCESS : DD_BLE_CFG_ST_FAIL,
                     100);
                 break;
             }
             case DD_BLE_CFG_CMD_CALIBRATE_IMU: {
-                /* Collect 50 gyro snapshots at 20 ms intervals (= 1 second)
-                 * while the glove is flat and still.  The averages become the
-                 * zero-rate bias that t_motion subtracts before mixing. */
-                static constexpr int kCalSamples = 50;
-                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING, 0);
-                double sum[3] = {0.0, 0.0, 0.0};
-                for (int i = 0; i < kCalSamples; ++i) {
-                    sum[0] += g_tele_gyro_mdps[0].load();
-                    sum[1] += g_tele_gyro_mdps[1].load();
-                    sum[2] += g_tele_gyro_mdps[2].load();
-                    if (i % 10 == 9) {
-                        dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING,
-                                              (uint8_t)((i + 1) * 100 / kCalSamples));
-                    }
-                    vTaskDelay(pdMS_TO_TICKS(20));
+                /* Hold-still gyro bias calibration. Reset the accumulator,
+                 * flip the running flag so t_imu_sample feeds samples in, and
+                 * poll progress until kSamples reads have landed (~3 s at the
+                 * 100 Hz sample rate). On finish, divide accumulator/count to
+                 * get the per-axis bias in rad/s, apply, persist to NVS. */
+                constexpr uint32_t kSamples = 300;
+                if (g_sleeping.load()) {
+                    dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_FAIL, 0);
+                    printf("[cfg] gyro cal refused: device sleeping\n");
+                    break;
                 }
-                g_gyro_bias_mdps[0].store((int16_t)(sum[0] / kCalSamples));
-                g_gyro_bias_mdps[1].store((int16_t)(sum[1] / kCalSamples));
-                g_gyro_bias_mdps[2].store((int16_t)(sum[2] / kCalSamples));
-                printf("[cfg] gyro bias set: %d %d %d mdps\n",
-                       (int)g_gyro_bias_mdps[0].load(),
-                       (int)g_gyro_bias_mdps[1].load(),
-                       (int)g_gyro_bias_mdps[2].load());
-                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+                g_gyro_cal_sum[0].store(0);
+                g_gyro_cal_sum[1].store(0);
+                g_gyro_cal_sum[2].store(0);
+                g_gyro_cal_count.store(0);
+                g_gyro_cal_running.store(true, std::memory_order_release);
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING, 0);
+
+                uint32_t got = 0;
+                while ((got = g_gyro_cal_count.load()) < kSamples) {
+                    uint8_t pct = (uint8_t)((got * 100u) / kSamples);
+                    dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING, pct);
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+                g_gyro_cal_running.store(false, std::memory_order_release);
+
+                const int64_t sx = g_gyro_cal_sum[0].load();
+                const int64_t sy = g_gyro_cal_sum[1].load();
+                const int64_t sz = g_gyro_cal_sum[2].load();
+                const uint32_t n = g_gyro_cal_count.load();
+                /* Accumulator captured post-subtraction residuals (dd_mpu6050_read
+                 * already removes the active bias). Compose with the existing
+                 * bias so re-calibrating after a reboot converges to the true
+                 * bias instead of overwriting a good value with ~0. */
+                const float rbx = (float)sx / ((float)n * 1024000.0f);
+                const float rby = (float)sy / ((float)n * 1024000.0f);
+                const float rbz = (float)sz / ((float)n * 1024000.0f);
+                float pbx = 0.0f, pby = 0.0f, pbz = 0.0f;
+                dd_mpu6050_get_gyro_bias(&pbx, &pby, &pbz);
+                const float bx = pbx + rbx;
+                const float by = pby + rby;
+                const float bz = pbz + rbz;
+                dd_mpu6050_set_gyro_bias(bx, by, bz);
+                ag_result_t save_rc = dd_mpu6050_save_gyro_bias();
+                printf("[cfg] gyro cal: n=%u bias=[%.4f %.4f %.4f] rad/s save=%d\n",
+                       (unsigned)n, (double)bx, (double)by, (double)bz, (int)save_rc);
+                dd_ble_cfg_set_status(
+                    op,
+                    save_rc == AG_OK ? DD_BLE_CFG_ST_SUCCESS : DD_BLE_CFG_ST_FAIL,
+                    100);
                 break;
             }
             case DD_BLE_CFG_CMD_SLEEP: {

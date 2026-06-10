@@ -70,11 +70,6 @@ extern "C" ag_result_t srv_input_init(uint16_t debounce_ms)
     return AG_OK;
 }
 
-extern "C" void srv_input_reset(void)
-{
-    clear_state_all();
-}
-
 extern "C" void srv_input_set_thresholds(const uint16_t thresh[TOUCH_PAD_COUNT])
 {
     if (thresh == NULL) return;

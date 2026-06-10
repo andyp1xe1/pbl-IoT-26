@@ -31,37 +31,33 @@ export const NO_MODIFIER = 0xff;
 
 export const PAD_NAMES: readonly string[] = ["Thumb", "Index", "Middle", "Ring"];
 
-/** Motion-mix input axes. Order is wire-stable — extending requires a
- *  config schema bump. Six raw IMU axes plus three Madgwick-fused rates
- *  (zero when the toggle is off). Matches AG_MIX_* in ag_types.h. */
+/** Motion-mix input axes — cursor-eligible signals only. Order is
+ *  wire-stable; extending it requires a config schema bump. The Y-axis lanes
+ *  (GY, AY, PITCH) are absent: rotation about glove Y is wrist twist, which
+ *  is posture, not gesture, and is decoupled from cursor motion. Matches
+ *  AG_MIX_* in ag_types.h. */
 export enum MixAxis {
   Gx = 0,
-  Gy = 1,
-  Gz = 2,
-  Ax = 3,
-  Ay = 4,
-  Az = 5,
-  Roll = 6,
-  Pitch = 7,
-  Yaw = 8,
+  Gz = 1,
+  Ax = 2,
+  Az = 3,
+  Roll = 4,
+  Yaw = 5,
 }
-export const MIX_AXIS_COUNT = 9;
+export const MIX_AXIS_COUNT = 6;
 
 export const MIX_AXIS_LABELS: Record<MixAxis, string> = {
   [MixAxis.Gx]: "Gyro X",
-  [MixAxis.Gy]: "Gyro Y",
   [MixAxis.Gz]: "Gyro Z",
   [MixAxis.Ax]: "Accel X",
-  [MixAxis.Ay]: "Accel Y",
   [MixAxis.Az]: "Accel Z",
   [MixAxis.Roll]: "Roll rate (fused)",
-  [MixAxis.Pitch]: "Pitch rate (fused)",
   [MixAxis.Yaw]: "Yaw rate (fused)",
 };
 
-/** Nine signed weights, one per AG_MIX_* axis. */
+/** Six signed weights, one per AG_MIX_* axis. */
 export type MixVector = [
-  number, number, number, number, number, number, number, number, number,
+  number, number, number, number, number, number,
 ];
 
 /** Wire format v3 — see docs/plans/11-companion-app-firmware-extensions.md §11.2. */
@@ -82,6 +78,10 @@ export interface AgConfig {
   mixX: MixVector;
   /** Signed milli-weight per axis into cursor Y. */
   mixY: MixVector;
+  /** Wrist-roll compensation strength ×1000 (0 = off, 1000 = full undo).
+   *  Pre-rotates the body-frame angular increment by −φ·strength about
+   *  glove Y so cursor mapping stays invariant to wrist twist. */
+  wristRollCompMilli: number;
 }
 
 export interface AgTelemetry {
@@ -180,11 +180,11 @@ export interface IAirGloveClient {
   onStatus(cb: (s: AgStatus) => void): void;
 }
 
-export const CONFIG_VERSION_V3 = 3;
+export const CONFIG_VERSION_V4 = 4;
 
 export function defaultConfig(): AgConfig {
   return {
-    version: CONFIG_VERSION_V3,
+    version: CONFIG_VERSION_V4,
     flags: 0,
     sensXMilli: 1000,
     sensYMilli: 1000,
@@ -201,12 +201,12 @@ export function defaultConfig(): AgConfig {
     modifierPad: NO_MODIFIER,
     clickActionAlt: [ClickAction.None, ClickAction.None, ClickAction.None],
     madgwickEnabled: true,
-    /* Pitch (fused) → cursor X, Roll (fused) → cursor Y, both at unit gain.
-     * A small raw gyro feed-forward (Gyro Y → X, Gyro X → Y at +0.05) adds
-     * the leading-edge "snap" that fusion lag would otherwise smooth out;
-     * keep these two layers paired when re-tuning. Must mirror
+    /* Cursor X from compensated YAW (with small raw GZ feed-forward);
+     * cursor Y from compensated ROLL (with raw GX feed-forward).
+     * Signal order: { GX, GZ, AX, AZ, ROLL, YAW }. Must mirror
      * dd_ble_cfg::kBuiltinDefaults so first-boot and post-NVS match. */
-    mixX: [0, +50, 0, 0, 0, 0, 0, +1000, 0],
-    mixY: [+50, 0, 0, 0, 0, 0, +1000, 0, 0],
+    mixX: [0, -50, 0, 0, 0, -1000],
+    mixY: [+50, 0, 0, 0, +1000, 0],
+    wristRollCompMilli: 1000,
   };
 }

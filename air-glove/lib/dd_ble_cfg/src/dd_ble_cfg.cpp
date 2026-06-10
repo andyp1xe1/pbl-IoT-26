@@ -30,42 +30,40 @@ constexpr char kStatusUuid[] = "41470005-7a13-4b1e-9c2f-1d0e5f6a7b8c";
 constexpr char kNvsNamespace[] = "agcfg";
 constexpr char kNvsKey[]       = "cfg";
 
-/* Wire format v2 — see docs/plans/11-companion-app-firmware-extensions.md §11.2. */
-constexpr uint8_t kConfigVersion = 3;
-/* v3 layout: 28 (v2 fields) + 1 (madgwick_enabled) + 2·9·2 (mix matrix) = 65. */
-constexpr size_t  kConfigSize    = 65;
+/* Wire format v4 — cursor mix shrinks to 6 lanes (drops GY/AY/PITCH) and adds
+ * wrist_roll_comp_milli. v4 layout:
+ *   28 (v2 fields) + 1 (madgwick_enabled) + 2·6·2 (mix) + 2 (comp) = 55.
+ * Strict: a wrong size or wrong version is a hard reject; no migration. */
+constexpr uint8_t kConfigVersion = 4;
+constexpr size_t  kConfigSize    = 55;
 constexpr size_t  kTelemetrySize = 24;
 constexpr size_t  kStatusSize    = 4;
 
-/* Defaults reproduce the pre-mix-matrix behaviour: cursor follows fused
- * pitch and yaw (pitch + yaw → dx, roll → dy with the historical signs).
- * `gain_low ≈ 400` per radian is folded into a unit (1000) mix weight ×
- * the sens_x/y multipliers, so users can dial both via the UI later.
- *
- * mix_x layout (one entry per AG_MIX_*):
- *   {gx=0, gy=+50, gz=0, ax=0, ay=0, az=0, roll=0, pitch=+1000, yaw=0}
- * mix_y:
- *   {gx=+50, gy=0, gz=0, ax=0, ay=0, az=0, roll=+1000, pitch=0, yaw=0}
- * Fused Pitch/Roll do the work; a small raw gyro feed-forward adds the
- * leading-edge "snap" that fusion lag would otherwise smooth out. */
+/* Defaults: cursor X from compensated YAW (with a small raw GZ feed-forward
+ * for snap); cursor Y from compensated ROLL (with raw GX feed-forward).
+ * GY/AY/PITCH are not present — they're wrist-twist signals, not gesture.
+ * Wrist-roll compensation defaults to full (1000 = 1.0) so the cursor mapping
+ * is invariant to wrist orientation out of the box. Signal order matches
+ * AG_MIX_*: { GX, GZ, AX, AZ, ROLL, YAW }. */
 const dd_ble_cfg_t kBuiltinDefaults = {
-    /* sens_x_milli        */ 1000,
-    /* sens_y_milli        */ 1000,
-    /* deadzone_mrad       */ 15,   /* radial dz in the mixed plane                     */
-    /* madgwick_beta_milli */ 145,  /* responsive but still filters wrist vibration     */
-    /* debounce_ms         */ 15,   /* 2 sample ticks @10ms — catches bench wire taps   */
-    /* touch_threshold[]   */ {20, 20, 20, 20},   /* empirical safe cap-pad fire point */
-    /* click_action[]      */ {
-        AG_CLICK_NONE,         /* THUMB  — unused by default                       */
-        AG_CLICK_LEFT,         /* INDEX  — left click                              */
-        AG_CLICK_RIGHT,        /* MIDDLE — right click                             */
-        AG_CLICK_SCROLL_MODE,  /* RING   — hold to scroll (replaces g_scroll_mode) */
+    /* sens_x_milli            */ 1000,
+    /* sens_y_milli            */ 1000,
+    /* deadzone_mrad           */ 15,
+    /* madgwick_beta_milli     */ 145,
+    /* debounce_ms             */ 15,
+    /* touch_threshold[]       */ {20, 20, 20, 20},
+    /* click_action[]          */ {
+        AG_CLICK_NONE,
+        AG_CLICK_LEFT,
+        AG_CLICK_RIGHT,
+        AG_CLICK_SCROLL_MODE,
     },
-    /* modifier_pad        */ AG_NO_MODIFIER,
-    /* click_action_alt[]  */ {AG_CLICK_NONE, AG_CLICK_NONE, AG_CLICK_NONE},
-    /* madgwick_enabled    */ 1,
-    /* mix_x_milli[]       */ { 0, +50, 0, 0, 0, 0,     0, +1000, 0 },
-    /* mix_y_milli[]       */ { +50, 0, 0, 0, 0, 0, +1000,     0, 0 },
+    /* modifier_pad            */ AG_NO_MODIFIER,
+    /* click_action_alt[]      */ {AG_CLICK_NONE, AG_CLICK_NONE, AG_CLICK_NONE},
+    /* madgwick_enabled        */ 1,
+    /* mix_x_milli[]           */ {   0,  -50, 0, 0,     0, -1000 },
+    /* mix_y_milli[]           */ { +50,    0, 0, 0, +1000,     0 },
+    /* wrist_roll_comp_milli   */ 1000,
 };
 
 static dd_ble_cfg_t   s_cfg              = kBuiltinDefaults;
@@ -108,11 +106,10 @@ static inline uint8_t clamp_action(uint8_t a) {
     return (a > AG_CLICK_MAX) ? AG_CLICK_NONE : a;
 }
 
-/* Wire layout v3 (65 bytes). Offsets up to 27 unchanged from v2 so the
- * existing fields keep the same on-the-wire position. New tail:
- *   [28]      madgwick_enabled       u8
- *   [29..46]  mix_x_milli[9]         9 × i16 little-endian
- *   [47..64]  mix_y_milli[9]         9 × i16 little-endian
+/* Wire layout v4 (55 bytes). Offsets [0..28] unchanged from v3. Tail:
+ *   [29..40]  mix_x_milli[6]            6 × i16 little-endian
+ *   [41..52]  mix_y_milli[6]            6 × i16 little-endian
+ *   [53..54]  wrist_roll_comp_milli     u16
  */
 static void encode_config(uint8_t buf[kConfigSize], const dd_ble_cfg_t *c) {
     buf[0] = kConfigVersion;
@@ -128,10 +125,11 @@ static void encode_config(uint8_t buf[kConfigSize], const dd_ble_cfg_t *c) {
     for (int i = 0; i < 3; ++i) buf[25 + i] = c->click_action_alt[i];
     buf[28] = c->madgwick_enabled ? 1 : 0;
     for (int i = 0; i < AG_MIX_COUNT; ++i) put_i16(&buf[29 + i * 2], c->mix_x_milli[i]);
-    for (int i = 0; i < AG_MIX_COUNT; ++i) put_i16(&buf[47 + i * 2], c->mix_y_milli[i]);
+    for (int i = 0; i < AG_MIX_COUNT; ++i) put_i16(&buf[41 + i * 2], c->mix_y_milli[i]);
+    put_u16(&buf[53], c->wrist_roll_comp_milli);
 }
 
-/* Parse, version-check, and clamp a v3 (65-byte) config blob.
+/* Parse, version-check, and clamp a v4 (55-byte) config blob.
  * No fallback: a wrong size or wrong version is a hard reject. */
 static bool decode_config(dd_ble_cfg_t *c, const uint8_t *p, size_t n) {
     if (n < kConfigSize)        return false;
@@ -158,8 +156,9 @@ static bool decode_config(dd_ble_cfg_t *c, const uint8_t *p, size_t n) {
     c->madgwick_enabled = (p[28] != 0) ? 1 : 0;
     for (int i = 0; i < AG_MIX_COUNT; ++i) {
         c->mix_x_milli[i] = clamp_i16(get_i16(&p[29 + i * 2]), -2000, +2000);
-        c->mix_y_milli[i] = clamp_i16(get_i16(&p[47 + i * 2]), -2000, +2000);
+        c->mix_y_milli[i] = clamp_i16(get_i16(&p[41 + i * 2]), -2000, +2000);
     }
+    c->wrist_roll_comp_milli = clamp_u16(get_u16(&p[53]), 0, 1000);
     return true;
 }
 
@@ -187,13 +186,14 @@ public:
         portEXIT_CRITICAL(&s_mux);
         /* Re-publish a canonical (clean-flag) value so reads are consistent. */
         seed_config_characteristic();
-        printf("[dd_ble_cfg] config v3: sensX=%u sensY=%u dz=%umrad "
-               "beta=%u debounce=%ums mod=%u madgwick=%u "
+        printf("[dd_ble_cfg] config v4: sensX=%u sensY=%u dz=%umrad "
+               "beta=%u debounce=%ums mod=%u madgwick=%u wrist_comp=%u "
                "click=[%u,%u,%u,%u] alt=[%u,%u,%u]\n",
                parsed.sens_x_milli, parsed.sens_y_milli,
                parsed.deadzone_mrad, parsed.madgwick_beta_milli,
                parsed.debounce_ms, (unsigned)parsed.modifier_pad,
                (unsigned)parsed.madgwick_enabled,
+               (unsigned)parsed.wrist_roll_comp_milli,
                parsed.click_action[0], parsed.click_action[1],
                parsed.click_action[2], parsed.click_action[3],
                parsed.click_action_alt[0], parsed.click_action_alt[1],
@@ -256,7 +256,7 @@ extern "C" ag_result_t dd_ble_cfg_init(const dd_ble_cfg_t *defaults) {
     /* 2. Attach to the existing NimBLE server (dd_ble_hid created it). */
     NimBLEServer *server = NimBLEDevice::getServer();
     if (server == nullptr) {
-        printf("[dd_ble_cfg] no NimBLE server — call dd_ble_hid_init first\n");
+        printf("[dd_ble_cfg] no NimBLE server — call dd_ble_hid_init_server first\n");
         return AG_ERR_STATE;
     }
 

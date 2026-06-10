@@ -22,13 +22,15 @@ void setUp(void) {}
 void tearDown(void) {}
 
 static void test_init_returns_ok(void) {
-    TEST_ASSERT_EQUAL_INT(AG_OK, dd_ble_hid_init("AirGloveTest"));
+    TEST_ASSERT_EQUAL_INT(AG_OK, dd_ble_hid_init_server("AirGloveTest"));
+    TEST_ASSERT_EQUAL_INT(AG_OK, dd_ble_hid_start());
 }
 
 static void test_init_is_idempotent(void) {
     /* Calling init twice must not crash; second call returns AG_OK
      * and leaves the previously-configured stack alone. */
-    TEST_ASSERT_EQUAL_INT(AG_OK, dd_ble_hid_init("AirGloveTest"));
+    TEST_ASSERT_EQUAL_INT(AG_OK, dd_ble_hid_init_server("AirGloveTest"));
+    TEST_ASSERT_EQUAL_INT(AG_OK, dd_ble_hid_start());
 }
 
 static void test_not_connected_at_boot(void) {

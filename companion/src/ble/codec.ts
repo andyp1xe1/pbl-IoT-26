@@ -3,19 +3,19 @@ import {
   AgStatus,
   AgTelemetry,
   ClickAction,
-  CONFIG_VERSION_V3,
+  CONFIG_VERSION_V4,
   MIX_AXIS_COUNT,
   MixVector,
   NO_MODIFIER,
   StatusState,
 } from "./types";
 
-/** Wire format v3. v2 fields keep their byte offsets; new fields tail-append:
- *    [28]      madgwickEnabled       u8
- *    [29..46]  mixX[9]               9 × i16 little-endian
- *    [47..64]  mixY[9]               9 × i16 little-endian
+/** Wire format v4. v3 head (offsets [0..28]) unchanged; new tail:
+ *    [29..40]  mixX[6]               6 × i16 little-endian
+ *    [41..52]  mixY[6]               6 × i16 little-endian
+ *    [53..54]  wristRollCompMilli    u16
  */
-export const CONFIG_SIZE = 65;
+export const CONFIG_SIZE = 55;
 export const TELEMETRY_SIZE = 24;
 export const STATUS_SIZE = 4;
 
@@ -40,7 +40,7 @@ function clampAction(a: number): ClickAction {
 export function encodeConfig(cfg: AgConfig): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(CONFIG_SIZE);
   const dv = new DataView(bytes.buffer);
-  dv.setUint8(0, CONFIG_VERSION_V3);
+  dv.setUint8(0, CONFIG_VERSION_V4);
   dv.setUint8(1, cfg.flags & 0xff);
   dv.setUint16(2, clampU16(cfg.sensXMilli, 100, 5000), LE);
   dv.setUint16(4, clampU16(cfg.sensYMilli, 100, 5000), LE);
@@ -61,8 +61,9 @@ export function encodeConfig(cfg: AgConfig): Uint8Array<ArrayBuffer> {
   dv.setUint8(28, cfg.madgwickEnabled ? 1 : 0);
   for (let i = 0; i < MIX_AXIS_COUNT; i++) {
     dv.setInt16(29 + i * 2, clampI16(cfg.mixX[i], -2000, 2000), LE);
-    dv.setInt16(47 + i * 2, clampI16(cfg.mixY[i], -2000, 2000), LE);
+    dv.setInt16(41 + i * 2, clampI16(cfg.mixY[i], -2000, 2000), LE);
   }
+  dv.setUint16(53, clampU16(cfg.wristRollCompMilli, 0, 1000), LE);
   return bytes;
 }
 
@@ -104,7 +105,8 @@ export function decodeConfig(dv: DataView): AgConfig {
     ],
     madgwickEnabled: dv.getUint8(28) !== 0,
     mixX: readMixVector(dv, 29),
-    mixY: readMixVector(dv, 47),
+    mixY: readMixVector(dv, 41),
+    wristRollCompMilli: dv.getUint16(53, LE),
   };
 }
 

@@ -65,12 +65,28 @@ extern std::atomic<int16_t>  g_tele_accel_mg[3];
 extern std::atomic<int16_t>  g_tele_gyro_mdps[3];
 extern std::atomic<uint16_t> g_tele_touch_raw[4];
 
-/* ── Gyro zero-rate bias (milli-deg/s, glove frame) ────────────────────────
- * Set by t_cfg when CMD_CALIBRATE_IMU runs (50-sample average of idle gyro).
- * Read by t_motion to subtract before converting to rad/s for the mixer.
- * Starts at zero (no correction) — valid from the first successful calibration.
- * Shared as int16_t atomics; 16-bit aligned writes are lock-free on ESP32. */
-extern std::atomic<int16_t>  g_gyro_bias_mdps[3];
+/* Gyro-bias calibration shared state.
+ *
+ *  - g_gyro_cal_running: t_cfg flips this true to start sample accumulation
+ *    and false to stop. Single-writer (t_cfg), single-reader (t_imu_sample).
+ *  - g_gyro_cal_count: incremented by t_imu_sample per accepted sample. t_cfg
+ *    polls it to know progress. Wraps on uint32 — calibrations sample 300.
+ *  - g_gyro_cal_sum_*: accumulator in body-frame milli-rad/s × 1024 (fixed-
+ *    point i64). Lock-free: only t_imu_sample writes, and only when running;
+ *    t_cfg reads after stopping it. Holds plenty of headroom: 300 samples ×
+ *    32 rad/s × 1024 × 1000 ≈ 1e10, well below INT64_MAX. */
+extern std::atomic<bool>     g_gyro_cal_running;
+extern std::atomic<uint32_t> g_gyro_cal_count;
+extern std::atomic<int64_t>  g_gyro_cal_sum[3];
+
+/* Touch-baseline calibration. Same shape as the gyro path: t_cfg flips the
+ * running flag, t_touch accumulates raw cap-pad reads at its native 100 Hz,
+ * t_cfg polls count for progress and computes baseline = sum/count when done.
+ * Buttons contribute nothing (their raw is 0/4095 — meaningless as a baseline)
+ * so accumulation runs only on capacitive pads. */
+extern std::atomic<bool>     g_touch_cal_running;
+extern std::atomic<uint32_t> g_touch_cal_count;
+extern std::atomic<uint32_t> g_touch_cal_sum[4];   /* indexed by touch_pad_id_t */
 
 /* Task entry points. */
 void t_imu_sample_fn(void *);
