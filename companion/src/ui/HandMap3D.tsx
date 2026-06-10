@@ -34,14 +34,17 @@ const DEBUG_NAMES = false;
 /* ── Colours ──────────────────────────────────────────────────────────── */
 
 /* Skin/palm brightness boost over the raw GLB colour. */
-const SKIN_BOOST = 1.8;
+const SKIN_BOOST = 2.6;
 
-/* Pristine per-mesh GLB colour, keyed by the (globally cached) mesh object so
- * it survives component remounts. useGLTF caches the scene + meshes globally,
- * but per-instance refs reset on remount — if we re-read colour from the live
- * (already-tinted) material each mount, the boost compounds and the hand
- * bleaches to white. Recording the pristine colour once, here, prevents that. */
-const pristineColor = new WeakMap<THREE.Mesh, THREE.Color>();
+/* userData key under which each mesh's pristine GLB colour is stored. We keep
+ * it ON the mesh object (not in a module-level Map/WeakMap) because useGLTF
+ * caches the scene + meshes in a SEPARATE module that does not reload on HMR,
+ * while this module's top-level state IS wiped on every save. A module-level
+ * cache would reset on hot-reload, re-read the already-tinted material as the
+ * "pristine" value, and compound the boost — bleaching the hand whiter on
+ * every edit. mesh.userData rides with the persistent mesh, surviving both
+ * component remounts and HMR, so the pristine colour is captured exactly once. */
+const PRISTINE_KEY = "__agPristineColor";
 
 /* ── Types ────────────────────────────────────────────────────────────── */
 type GLTFResult = GLTF & {
@@ -79,17 +82,17 @@ function HandModel({
   // Per-mesh cloned material cache (per-instance; safe to reset on remount).
   const matCache = useRef<Map<string, THREE.MeshStandardMaterial>>(new Map());
 
-  /* Pristine colour for a mesh. Recorded the very first time the mesh is seen
-   * (globally), before any tint is applied, so it is always the true GLB value
-   * regardless of how many times the component has mounted. */
+  /* Pristine colour for a mesh, stored on mesh.userData so it is captured
+   * exactly once (the first time the mesh is ever seen, before any tint) and
+   * survives both remounts and HMR. */
   function getPristine(mesh: THREE.Mesh): THREE.Color {
-    let c = pristineColor.get(mesh);
+    let c = mesh.userData[PRISTINE_KEY] as THREE.Color | undefined;
     if (!c) {
       const src = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
       c = src instanceof THREE.MeshStandardMaterial
         ? src.color.clone()
         : new THREE.Color(1, 1, 1);
-      pristineColor.set(mesh, c);
+      mesh.userData[PRISTINE_KEY] = c;
     }
     return c;
   }

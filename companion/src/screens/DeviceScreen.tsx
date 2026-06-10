@@ -59,6 +59,7 @@ export function DeviceScreen() {
     <Screen title={title} gridClass="device-grid">
       <div className="device-stage">
         <Artwork variant="device" stateClass={artworkClass(link)} />
+        <p className="device-tagline">The future is at your fingertips.</p>
         {link.kind === "failed" && link.reason && (
           <p className="device-error" role="alert">
             {link.reason}
@@ -96,12 +97,6 @@ function PairedView({
         <ConnectionRow link={link} known={known} />
         <PowerRow link={link} />
       </Section>
-      <button
-        className="btn btn-ghost-danger device-forget"
-        onClick={() => void store.forget(known?.id)}
-      >
-        Forget device
-      </button>
       <Section title="Info">
         <InfoRow label="Model" value={deviceInfo?.model} link={link} />
         <InfoRow label="Firmware" value={deviceInfo?.firmware} link={link} />
@@ -111,6 +106,12 @@ function PairedView({
           link={link}
         />
       </Section>
+      <button
+        className="btn btn-ghost-danger device-forget"
+        onClick={() => void store.forget(known?.id)}
+      >
+        Forget device
+      </button>
     </>
   );
 }
