@@ -213,14 +213,10 @@ export class DemoAirGloveClient implements IAirGloveClient {
     const gyroY = this.sleeping ? 0 : Math.round(60 * Math.cos(t * 1.1 + 0.7));
     const gyroZ = this.sleeping ? 0 : Math.round(40 * Math.sin(t * 1.7));
 
-    // Touch: idle baseline ~120 with one pad lighting up at a time so the
-    // Tune bars demonstrably move under a thumb-walk pattern.
+    // Touch: static idle baseline — no auto-cycling so the 3D hand
+    // finger highlights only respond to real user interaction.
     const base = 120;
-    const lit = Math.floor(t * 0.8) % 4;
     const touch: [number, number, number, number] = [base, base, base, base];
-    if (!this.sleeping) {
-      touch[lit] = 1200 + Math.round(400 * Math.abs(Math.sin(t * 3)));
-    }
 
     let flags = TELEMETRY_FLAG_HID_CONNECTED;
     if (this.sleeping) flags |= TELEMETRY_FLAG_SLEEPING;

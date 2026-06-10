@@ -1465,3 +1465,342 @@ input[type="range"] {
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HandMap3D — 3-D GLB finger picker
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.hand3d-root {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  flex-shrink: 0;
+  width: 360px;
+}
+
+/* Canvas wrapper — grows to fill the grid row height so it always
+   matches the detail panel, regardless of how much content is on the right */
+.hand3d-canvas {
+  width: 100%;
+  flex: 1;
+  min-height: 340px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border, #e3e6f1);
+  background: radial-gradient(ellipse at 50% 35%, #f4f5ff 0%, #edf0fa 100%);
+  box-shadow: 0 2px 16px rgba(94, 106, 210, 0.10);
+}
+
+/* Finger tab-strip */
+.hand3d-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+
+.hand3d-tab {
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  border-radius: 999px;
+  border: 1.5px solid var(--border, #e3e6f1);
+  background: var(--surface, #fff);
+  color: var(--muted, #9398ae);
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s, background 0.14s;
+}
+
+.hand3d-tab:hover {
+  background: var(--surface-2, #f5f6fc);
+  color: var(--text, #2b2f3c);
+}
+
+.hand3d-tab--active {
+  background: rgba(94, 106, 210, 0.10);
+  border-color: #8b94e4;
+  color: #5e6ad2;
+  font-weight: 700;
+}
+
+/* ── Click-map layout: hand canvas left, detail panel right ── */
+
+.click-map-layout {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 28px;
+  align-items: stretch;
+  padding: 22px 24px;
+}
+
+@media (max-width: 680px) {
+  .click-map-layout {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .hand3d-root {
+    width: 100%;
+    align-self: center;
+  }
+
+  .hand3d-canvas {
+    flex: none;
+    height: 300px;
+  }
+}
+
+/* Detail panel */
+
+.click-map-detail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.click-map-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border, #e3e6f1);
+  margin-bottom: 2px;
+}
+
+.click-map-detail-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text, #2b2f3c);
+  letter-spacing: -0.01em;
+}
+
+.click-map-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #eceefb;
+  color: #5e6ad2;
+  border: 1px solid #c5caf5;
+}
+
+/* field rows inside the detail panel */
+
+.click-map-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 18px 0 20px;
+}
+
+.click-map-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Modifier finger row: label left, select right */
+.click-map-field--inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.click-map-field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--muted, #9398ae);
+  margin-bottom: 10px;
+  display: block;
+}
+
+/* tab strip above the action grid (visible only when modifier is set) */
+
+.click-map-action-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  background: var(--surface-2, #f4f6fc);
+  border: 1px solid var(--border, #e3e6f1);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.click-map-action-tab {
+  flex: 1;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted, #9398ae);
+  cursor: pointer;
+  transition: background 0.13s, color 0.13s;
+  white-space: nowrap;
+}
+
+.click-map-action-tab:hover {
+  background: var(--surface, #fff);
+  color: var(--text, #2b2f3c);
+}
+
+.click-map-action-tab--active {
+  background: var(--surface, #fff);
+  color: #4b56bd;
+  box-shadow: 0 1px 4px rgba(94, 106, 210, 0.14);
+}
+
+.click-map-modifier-hint {
+  margin: 8px 2px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #9398ae);
+}
+
+.click-map-modifier-hint strong {
+  color: var(--text, #2b2f3c);
+  font-weight: 600;
+}
+
+/* Shown when the selected finger IS the modifier — action grid is hidden */
+.click-map-modifier-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-2, #f4f6fc);
+  border: 1.5px dashed var(--border, #e3e6f1);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted, #9398ae);
+}
+
+.click-map-modifier-notice strong {
+  color: var(--text, #2b2f3c);
+  font-weight: 600;
+}
+
+.click-map-modifier-notice-icon {
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 1px;
+  flex-shrink: 0;
+  color: #8b94e4;
+}
+
+/* action button grid — 2 equal columns, each button fixed height */
+
+.click-map-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+}
+
+@media (max-width: 480px) {
+  .click-map-action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.click-map-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-ui);
+  border-radius: 12px;
+  border: 1.5px solid var(--border, #e3e6f1);
+  background: var(--surface, #fff);
+  color: #565d75;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1;
+  min-width: 0;
+}
+
+.click-map-action-btn:hover {
+  border-color: #b0b9f0;
+  background: #f4f5ff;
+}
+
+.click-map-action-btn--active {
+  background: #eceefb;
+  border-color: #5e6ad2;
+  color: #4b56bd;
+  font-weight: 600;
+}
+
+.click-map-action-btn--active .click-map-action-icon {
+  color: #5e6ad2;
+}
+
+/* lucide icon inside action buttons */
+.click-map-action-icon {
+  flex-shrink: 0;
+  color: var(--muted, #9398ae);
+  display: block;
+}
+
+/* save-button row inside the click-map detail column */
+
+.click-map-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0 0;
+}
+
+/* threshold sub-row */
+
+.click-map-thresh-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.click-map-thresh-value {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #eceefb;
+  color: #5e6ad2;
+  padding: 3px 10px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.click-map-thresh-slider {
+  width: 100%;
+  accent-color: #5e6ad2;
+  margin: 0 0 6px;
+  display: block;
+}
+
+.click-map-thresh-live {
+  font-size: 12px;
+  color: var(--muted, #9398ae);
+  font-variant-numeric: tabular-nums;
+}
+
+.click-map-thresh-live--scored {
+  color: #5e6ad2;
+  font-weight: 600;
+}
