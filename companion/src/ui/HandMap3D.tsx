@@ -35,7 +35,6 @@ const DEBUG_NAMES = false;
 
 
 const C_EMISSIVE_SEL = new THREE.Color("#1a1860"); // deep glow when selected
-const C_TOUCH_GLOW   = new THREE.Color("#a8ffdc"); // green-white when pad fires
 
 /* ── Types ────────────────────────────────────────────────────────────── */
 type GLTFResult = GLTF & {
@@ -46,8 +45,6 @@ type GLTFResult = GLTF & {
 interface HandModelProps {
   selected: number;
   hovered: number | null;
-  touch: [number, number, number, number];
-  thresholds: [number, number, number, number];
   onSelect: (pad: number) => void;
   onHover: (pad: number | null) => void;
 }
@@ -56,8 +53,6 @@ interface HandModelProps {
 function HandModel({
   selected,
   hovered,
-  touch,
-  thresholds,
   onSelect,
   onHover,
 }: HandModelProps) {
@@ -122,15 +117,8 @@ function HandModel({
     const mat = getMat(mesh);
     const isSel = selected === pad;
     const isHov = hovered === pad;
-    const live = touch[pad] ?? 0;
-    const thr = thresholds[pad] ?? 600;
 
-    if (live > thr) {
-      // Touch firing — vivid glow regardless of selection state
-      mat.color.copy(C_TOUCH_GLOW);
-      mat.emissive.copy(C_TOUCH_GLOW);
-      mat.emissiveIntensity = Math.min(((live / thr) - 1) * 0.7, 0.55);
-    } else if (isSel) {
+    if (isSel) {
       // Selected — strong brighten + bold emissive glow
       const orig = origColor.current.get(mesh.uuid);
       if (orig) mat.color.copy(orig).multiplyScalar(2.0);
@@ -194,11 +182,9 @@ function LoadingRing() {
 interface SceneProps {
   visualSel: number | null;
   onSelect: (pad: number) => void;
-  touch: [number, number, number, number];
-  thresholds: [number, number, number, number];
 }
 
-function HandScene({ visualSel, onSelect, touch, thresholds }: SceneProps) {
+function HandScene({ visualSel, onSelect }: SceneProps) {
   const [hovered, setHovered] = useState<number | null>(null);
   return (
     <>
@@ -213,8 +199,6 @@ function HandScene({ visualSel, onSelect, touch, thresholds }: SceneProps) {
           <HandModel
             selected={visualSel ?? -1}
             hovered={hovered}
-            touch={touch}
-            thresholds={thresholds}
             onSelect={onSelect}
             onHover={setHovered}
           />
@@ -237,18 +221,13 @@ function HandScene({ visualSel, onSelect, touch, thresholds }: SceneProps) {
 export interface HandMap3DProps {
   selected: number;
   onSelect: (pad: number) => void;
-  touch?: [number, number, number, number];
-  thresholds?: [number, number, number, number];
-  /** Unused in the 3D view but kept for API compat with the flat version. */
+  /** Kept for API compat — no longer used by the 3D view. */
+  touch?: unknown;
+  thresholds?: unknown;
   actions?: unknown;
 }
 
-export function HandMap3D({
-  selected,
-  onSelect,
-  touch = [0, 0, 0, 0],
-  thresholds = [600, 600, 600, 600],
-}: HandMap3DProps) {
+export function HandMap3D({ selected, onSelect }: HandMap3DProps) {
   const [visualSel, setVisualSel] = useState<number | null>(selected);
 
   function handleSelect(pad: number) {
@@ -268,8 +247,6 @@ export function HandMap3D({
           <HandScene
             visualSel={visualSel}
             onSelect={handleSelect}
-            touch={touch}
-            thresholds={thresholds}
           />
         </Canvas>
       </div>
