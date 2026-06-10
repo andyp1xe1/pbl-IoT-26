@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ALT_FORBIDDEN,
   CLICK_ACTION_LABELS,
@@ -6,10 +7,22 @@ import {
   NO_MODIFIER,
   PAD_NAMES,
 } from "../ble/types";
+
+const ACTION_ICON: Record<ClickAction, string> = {
+  [ClickAction.None]: "○",
+  [ClickAction.Left]: "◄",
+  [ClickAction.Right]: "►",
+  [ClickAction.Middle]: "◉",
+  [ClickAction.ScrollUp]: "↑",
+  [ClickAction.ScrollDown]: "↓",
+  [ClickAction.Clutch]: "⊕",
+  [ClickAction.ScrollMode]: "⇅",
+};
 import { Row, Section } from "../ui/Section";
 import { Slider } from "../ui/Slider";
 import { TouchBar } from "../ui/TouchBar";
 import { WorkScreen } from "../ui/WorkScreen";
+import { HandMap3D } from "../ui/HandMap3D";
 import { store, useAppState } from "../state/store";
 
 const CAPTION = "Adjust sensitivity, touch thresholds, and click mappings.";
@@ -41,12 +54,22 @@ function TuneBody() {
   const s = useAppState();
   const cfg = s.config;
   const dirty = s.configDirtyLocal || (cfg.flags & CONFIG_FLAG_DIRTY) !== 0;
+  const [selectedPad, setSelectedPad] = useState(1);
 
-  // Non-modifier pad indices, in the order their alt slot is stored.
   const altPads =
     cfg.modifierPad === NO_MODIFIER
       ? []
       : [0, 1, 2, 3].filter((p) => p !== cfg.modifierPad);
+
+  // Alt-slot index for the selected pad (–1 if not in alt table)
+  const altSlot = altPads.indexOf(selectedPad);
+
+  const liveTouch = s.telemetry?.touch ?? [0, 0, 0, 0];
+  const liveTouchTuple = liveTouch as [number, number, number, number];
+  const threshTuple = cfg.touchThreshold as [number, number, number, number];
+  const live = liveTouch[selectedPad] ?? 0;
+  const thresh = cfg.touchThreshold[selectedPad];
+  const scored = live > thresh;
 
   return (
     <>
@@ -103,14 +126,14 @@ function TuneBody() {
 
       <Section title="Touch — live & thresholds" className="tune-touch">
         {PAD_NAMES.map((name, i) => {
-          const live = s.telemetry?.touch[i] ?? 0;
-          const thresh = cfg.touchThreshold[i];
+          const lv = s.telemetry?.touch[i] ?? 0;
+          const thr = cfg.touchThreshold[i];
           return (
             <div key={name} className="touch-tune">
               <TouchBar
                 label={name}
-                value={live}
-                threshold={thresh}
+                value={lv}
+                threshold={thr}
                 max={4095}
                 invert
               />
@@ -121,7 +144,7 @@ function TuneBody() {
                   min={1}
                   max={4095}
                   step={10}
-                  value={thresh}
+                  value={thr}
                   onChange={(e) => {
                     const arr = [
                       ...cfg.touchThreshold,
@@ -130,7 +153,7 @@ function TuneBody() {
                     store.updateConfigLocal({ touchThreshold: arr });
                   }}
                 />
-                <span className="touch-tune-thresh-value">{thresh}</span>
+                <span className="touch-tune-thresh-value">{thr}</span>
               </div>
             </div>
           );
@@ -138,71 +161,145 @@ function TuneBody() {
       </Section>
 
       <Section title="Click mapping" className="tune-click">
-        {PAD_NAMES.map((name, i) => (
-          <Row
-            key={name}
-            label={name}
-            value={
-              <ActionSelect
-                value={cfg.clickAction[i]}
-                options={PRIMARY_OPTIONS}
-                onChange={(a) => {
-                  const arr = [...cfg.clickAction] as typeof cfg.clickAction;
-                  arr[i] = a;
-                  store.updateConfigLocal({ clickAction: arr });
-                }}
-              />
-            }
+        <div className="click-map-layout">
+          {/* ── Left: 3D hand picker ── */}
+          <HandMap3D
+            selected={selectedPad}
+            onSelect={setSelectedPad}
+            touch={liveTouchTuple}
+            thresholds={threshTuple}
+            actions={cfg.clickAction}
           />
-        ))}
 
-        <Row
-          label="Modifier finger"
-          value={
-            <select
-              className="action-select"
-              value={cfg.modifierPad === NO_MODIFIER ? "none" : String(cfg.modifierPad)}
-              onChange={(e) => {
-                const v = e.target.value === "none" ? NO_MODIFIER : Number(e.target.value);
-                store.updateConfigLocal({ modifierPad: v });
-              }}
-            >
-              <option value="none">None</option>
-              {PAD_NAMES.map((name, i) => (
-                <option key={name} value={i}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          }
-        />
+          {/* ── Right: per-finger detail panel ── */}
+          <div className="click-map-detail">
+            <div className="click-map-detail-header">
+              <span className="click-map-detail-name">
+                {PAD_NAMES[selectedPad]} finger
+              </span>
+              {scored && (
+                <span className="click-map-badge">active</span>
+              )}
+            </div>
 
-        {altPads.map((pad, slot) => (
-          <Row
-            key={`alt-${pad}`}
-            label={`${PAD_NAMES[pad]} (while modifier held)`}
-            value={
-              <ActionSelect
-                value={cfg.clickActionAlt[slot]}
-                options={ALT_OPTIONS}
-                onChange={(a) => {
-                  const arr = [...cfg.clickActionAlt] as typeof cfg.clickActionAlt;
-                  arr[slot] = a;
-                  store.updateConfigLocal({ clickActionAlt: arr });
-                }}
-              />
-            }
-          />
-        ))}
+            <div className="click-map-detail-body">
+              <div className="click-map-field">
+                <span className="click-map-field-label">Action</span>
+                <div className="click-map-action-grid">
+                  {PRIMARY_OPTIONS.map((a) => (
+                    <button
+                      key={a}
+                      className={`click-map-action-btn${cfg.clickAction[selectedPad] === a ? " click-map-action-btn--active" : ""}`}
+                      onClick={() => {
+                        const arr = [
+                          ...cfg.clickAction,
+                        ] as typeof cfg.clickAction;
+                        arr[selectedPad] = a;
+                        store.updateConfigLocal({ clickAction: arr });
+                      }}
+                    >
+                      <span className="click-map-action-icon">{ACTION_ICON[a]}</span>
+                      {CLICK_ACTION_LABELS[a]}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-        <div className="card-actions">
-          <button
-            className="btn btn-primary"
-            disabled={!dirty}
-            onClick={() => void store.save()}
-          >
-            {dirty ? "Save to device" : "Saved"}
-          </button>
+              {altSlot >= 0 && (
+                <div className="click-map-field">
+                  <span className="click-map-field-label">
+                    Action (while modifier held)
+                  </span>
+                  <div className="click-map-action-grid">
+                    {ALT_OPTIONS.map((a) => (
+                      <button
+                        key={a}
+                        className={`click-map-action-btn${cfg.clickActionAlt[altSlot] === a ? " click-map-action-btn--active" : ""}`}
+                        onClick={() => {
+                          const arr = [
+                            ...cfg.clickActionAlt,
+                          ] as typeof cfg.clickActionAlt;
+                          arr[altSlot] = a;
+                          store.updateConfigLocal({ clickActionAlt: arr });
+                        }}
+                      >
+                        <span className="click-map-action-icon">{ACTION_ICON[a]}</span>
+                        {CLICK_ACTION_LABELS[a]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="click-map-field">
+                <div className="click-map-thresh-header">
+                  <span className="click-map-field-label">
+                    Touch threshold
+                  </span>
+                  <span className="click-map-thresh-value">{thresh}</span>
+                </div>
+                <input
+                  type="range"
+                  className="click-map-thresh-slider"
+                  min={1}
+                  max={4095}
+                  step={10}
+                  value={thresh}
+                  onChange={(e) => {
+                    const arr = [
+                      ...cfg.touchThreshold,
+                    ] as typeof cfg.touchThreshold;
+                    arr[selectedPad] = Number(e.target.value);
+                    store.updateConfigLocal({ touchThreshold: arr });
+                  }}
+                />
+                <span
+                  className={`click-map-thresh-live${scored ? " click-map-thresh-live--scored" : ""}`}
+                >
+                  Live reading {live} —{" "}
+                  {scored ? "above threshold, registering as press" : "below threshold"}
+                </span>
+              </div>
+            </div>
+
+            <Row
+              label="Modifier finger"
+              value={
+                <select
+                  className="action-select"
+                  value={
+                    cfg.modifierPad === NO_MODIFIER
+                      ? "none"
+                      : String(cfg.modifierPad)
+                  }
+                  onChange={(e) => {
+                    const v =
+                      e.target.value === "none"
+                        ? NO_MODIFIER
+                        : Number(e.target.value);
+                    store.updateConfigLocal({ modifierPad: v });
+                  }}
+                >
+                  <option value="none">None</option>
+                  {PAD_NAMES.map((name, i) => (
+                    <option key={name} value={i}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              }
+            />
+
+            <div className="click-map-actions">
+              <button
+                className="btn btn-primary"
+                disabled={!dirty}
+                onClick={() => void store.save()}
+              >
+                {dirty ? "Save to device" : "Saved"}
+              </button>
+            </div>
+          </div>
         </div>
       </Section>
     </>
@@ -232,3 +329,6 @@ function ActionSelect({
     </select>
   );
 }
+
+// Kept for any future use; suppresses unused-export lint without removing
+export { ActionSelect };

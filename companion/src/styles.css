@@ -1128,3 +1128,244 @@ input[type="range"] {
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HandMap3D — 3-D GLB finger picker
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.hand3d-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Canvas wrapper — LIGHT background, matches app surface */
+.hand3d-canvas {
+  width: 260px;
+  height: 320px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border, #e3e6f1);
+  background: radial-gradient(ellipse at 50% 35%, #f4f5ff 0%, #edf0fa 100%);
+  box-shadow: 0 2px 16px rgba(94, 106, 210, 0.10);
+}
+
+/* Finger tab-strip */
+.hand3d-tabs {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hand3d-tab {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1.5px solid var(--border, #e3e6f1);
+  background: var(--surface-1, #fff);
+  color: var(--muted, #9398ae);
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s, background 0.14s;
+}
+
+.hand3d-tab:hover {
+  background: var(--surface-2, #f5f6fc);
+  color: var(--text, #2b2f3c);
+}
+
+.hand3d-tab--active {
+  background: rgba(94, 106, 210, 0.10);
+  border-color: #8b94e4;
+  color: #5e6ad2;
+  font-weight: 700;
+}
+
+/* ── Click-map layout: hand canvas left, detail panel right ── */
+
+.click-map-layout {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+  padding: 20px 22px 0;
+}
+
+@media (max-width: 760px) {
+  .click-map-layout {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 16px 0;
+  }
+
+  .hand3d-root {
+    align-self: center;
+  }
+}
+
+/* Detail panel */
+
+.click-map-detail {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: 20px;
+}
+
+.click-map-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border, #e3e6f1);
+  margin-bottom: 2px;
+}
+
+.click-map-detail-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text, #2b2f3c);
+  letter-spacing: -0.01em;
+}
+
+.click-map-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #eceefb;
+  color: #5e6ad2;
+  border: 1px solid #c5caf5;
+}
+
+/* field rows inside the detail panel */
+
+.click-map-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 18px 0 20px;
+}
+
+.click-map-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.click-map-field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--muted, #9398ae);
+  margin-bottom: 10px;
+  display: block;
+}
+
+/* action button grid */
+
+.click-map-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+}
+
+.click-map-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 13px;
+  font-size: 13.5px;
+  font-weight: 500;
+  border-radius: 12px;
+  border: 1.5px solid var(--border, #e3e6f1);
+  background: var(--surface-1, #fff);
+  color: var(--ink-2, #565d75);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1.2;
+}
+
+.click-map-action-btn:hover {
+  border-color: #b0b9f0;
+  background: #f4f5ff;
+}
+
+.click-map-action-btn--active {
+  background: #eceefb;
+  border-color: #5e6ad2;
+  color: #4b56bd;
+  font-weight: 600;
+}
+
+.click-map-action-btn--active .click-map-action-icon {
+  color: #5e6ad2;
+}
+
+.click-map-action-icon {
+  font-size: 14px;
+  color: var(--muted, #9398ae);
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  line-height: 1;
+}
+
+/* save-button row inside the click-map detail column */
+
+.click-map-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+/* threshold sub-row */
+
+.click-map-thresh-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.click-map-thresh-value {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #eceefb;
+  color: #5e6ad2;
+  padding: 3px 10px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.click-map-thresh-slider {
+  width: 100%;
+  accent-color: #5e6ad2;
+  margin: 0 0 6px;
+  display: block;
+}
+
+.click-map-thresh-live {
+  font-size: 12px;
+  color: var(--muted, #9398ae);
+  font-variant-numeric: tabular-nums;
+}
+
+.click-map-thresh-live--scored {
+  color: #5e6ad2;
+  font-weight: 600;
+}
