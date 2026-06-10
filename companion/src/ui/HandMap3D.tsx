@@ -33,8 +33,15 @@ const DEBUG_NAMES = false;
 
 /* ── Colours ──────────────────────────────────────────────────────────── */
 
+/* Skin/palm brightness boost over the raw GLB colour. */
+const SKIN_BOOST = 1.8;
 
-const C_EMISSIVE_SEL = new THREE.Color("#1a1860"); // deep glow when selected
+/* Pristine per-mesh GLB colour, keyed by the (globally cached) mesh object so
+ * it survives component remounts. useGLTF caches the scene + meshes globally,
+ * but per-instance refs reset on remount — if we re-read colour from the live
+ * (already-tinted) material each mount, the boost compounds and the hand
+ * bleaches to white. Recording the pristine colour once, here, prevents that. */
+const pristineColor = new WeakMap<THREE.Mesh, THREE.Color>();
 
 /* ── Types ────────────────────────────────────────────────────────────── */
 type GLTFResult = GLTF & {
@@ -69,9 +76,23 @@ function HandModel({
     console.log("[HandMap3D] all mesh names:", names);
   }
 
-  // Per-mesh cloned material + original colour cache
+  // Per-mesh cloned material cache (per-instance; safe to reset on remount).
   const matCache = useRef<Map<string, THREE.MeshStandardMaterial>>(new Map());
-  const origColor = useRef<Map<string, THREE.Color>>(new Map());
+
+  /* Pristine colour for a mesh. Recorded the very first time the mesh is seen
+   * (globally), before any tint is applied, so it is always the true GLB value
+   * regardless of how many times the component has mounted. */
+  function getPristine(mesh: THREE.Mesh): THREE.Color {
+    let c = pristineColor.get(mesh);
+    if (!c) {
+      const src = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      c = src instanceof THREE.MeshStandardMaterial
+        ? src.color.clone()
+        : new THREE.Color(1, 1, 1);
+      pristineColor.set(mesh, c);
+    }
+    return c;
+  }
 
   function getMat(mesh: THREE.Mesh): THREE.MeshStandardMaterial {
     if (!matCache.current.has(mesh.uuid)) {
@@ -81,8 +102,8 @@ function HandModel({
       const mat = src instanceof THREE.MeshStandardMaterial
         ? src.clone()
         : new THREE.MeshStandardMaterial();
+      mesh.material = mat;
       matCache.current.set(mesh.uuid, mat);
-      origColor.current.set(mesh.uuid, mat.color.clone());
     }
     return matCache.current.get(mesh.uuid)!;
   }
@@ -100,40 +121,40 @@ function HandModel({
     if (obj instanceof THREE.Mesh) meshes.push(obj);
   });
 
-  // Apply per-finger tinting every render
+  /* Apply per-finger tinting every render. Every branch starts from the
+   * pristine GLB colour (copy, not multiply-in-place), so the result is fully
+   * idempotent — re-running this loop any number of times yields the same
+   * colour and can never accumulate. */
   for (const mesh of meshes) {
     const pad = padForMesh(mesh.name);
+    const mat = getMat(mesh);
+    const orig = getPristine(mesh);
 
-    // Brighten skin/palm/wrist meshes (not pad zones, not the outline)
     if (pad < 0) {
-      const mat = getMat(mesh);
-      const orig = origColor.current.get(mesh.uuid);
-      if (orig) mat.color.copy(orig).multiplyScalar(1.55);
+      // Skin/palm/wrist — fixed brightness boost, no glow.
+      mat.color.copy(orig).multiplyScalar(SKIN_BOOST);
       mat.emissive.set(0, 0, 0);
       mat.emissiveIntensity = 0;
       mesh.material = mat;
       continue;
     }
-    const mat = getMat(mesh);
+
     const isSel = selected === pad;
     const isHov = hovered === pad;
 
     if (isSel) {
       // Selected — strong brighten + bold emissive glow
-      const orig = origColor.current.get(mesh.uuid);
-      if (orig) mat.color.copy(orig).multiplyScalar(2.0);
-      mat.emissive.copy(orig ?? C_EMISSIVE_SEL).multiplyScalar(0.6);
+      mat.color.copy(orig).multiplyScalar(2.0);
+      mat.emissive.copy(orig).multiplyScalar(0.6);
       mat.emissiveIntensity = 1.0;
     } else if (isHov) {
       // Hover — clearly lighter with visible glow
-      const orig = origColor.current.get(mesh.uuid);
-      if (orig) mat.color.copy(orig).multiplyScalar(1.8);
-      mat.emissive.copy(orig ?? mat.color).multiplyScalar(0.3);
+      mat.color.copy(orig).multiplyScalar(1.8);
+      mat.emissive.copy(orig).multiplyScalar(0.3);
       mat.emissiveIntensity = 0.6;
     } else {
       // Idle — restore original GLB baked colour
-      const orig = origColor.current.get(mesh.uuid);
-      if (orig) mat.color.copy(orig);
+      mat.color.copy(orig);
       mat.emissive.set(0, 0, 0);
       mat.emissiveIntensity = 0;
     }
@@ -189,10 +210,10 @@ function HandScene({ visualSel, onSelect }: SceneProps) {
   return (
     <>
       {/* Soft, studio-style lighting for the light background */}
-      <ambientLight intensity={1.1} />
-      <directionalLight position={[3, 6, 4]} intensity={0.9} />
-      <directionalLight position={[-4, 2, 2]} intensity={0.4} color="#c8d0ff" />
-      <directionalLight position={[0, -2, 3]} intensity={0.2} />
+      <ambientLight intensity={0.75} />
+      <directionalLight position={[3, 6, 4]} intensity={0.7} />
+      <directionalLight position={[-4, 2, 2]} intensity={0.35} color="#c8d0ff" />
+      <directionalLight position={[0, -2, 3]} intensity={0.15} />
 
       <Bounds fit clip observe margin={0.88}>
         <Suspense fallback={<LoadingRing />}>
