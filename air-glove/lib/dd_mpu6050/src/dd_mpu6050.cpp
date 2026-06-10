@@ -106,12 +106,21 @@ extern "C" ag_result_t dd_mpu6050_read(imu_sample_t *out) {
     const int16_t gy_raw = (int16_t)((uint16_t)b[10] << 8 | b[11]);
     const int16_t gz_raw = (int16_t)((uint16_t)b[12] << 8 | b[13]);
 
-    /* Axis remap for the 90° board rotation on the glove mount.
-     * Re-expresses board-frame samples in the glove frame so that
-     * srv_fusion / srv_motion can keep their original axis conventions.
-     *   glove_x =  board_y
-     *   glove_y = -board_z
-     *   glove_z = -board_x      (chosen to keep the basis right-handed) */
+    /* Axis remap for the glove mount. Target glove frame is right-handed,
+     * Z-up (gravity along +Z at rest) so srv_fusion's standard Madgwick
+     * objective and downstream ROLL/PITCH/YAW labels are physically honest.
+     *
+     * Physical sensor → glove mapping (from bench characterisation):
+     *   glove_x (left-right) =  board_x
+     *   glove_y (forward)    =  board_z
+     *   glove_z (up)         =  board_y
+     *
+     * Signs assume neutral pose = palm down. Verify on hardware:
+     *   palm down at rest → az ≈ +9.8, ax ≈ 0, ay ≈ 0
+     *   tip fingers down  → ay goes positive
+     *   tilt hand right   → ax goes positive
+     *   twist CW from top → gz positive
+     * Negate the offending axis (both accel and gyro) if any check fails. */
     const float ax_b = (float)ax_raw * s_accel_scale_mps2;
     const float ay_b = (float)ay_raw * s_accel_scale_mps2;
     const float az_b = (float)az_raw * s_accel_scale_mps2;
@@ -120,11 +129,11 @@ extern "C" ag_result_t dd_mpu6050_read(imu_sample_t *out) {
     const float gz_b = (float)gz_raw * s_gyro_scale_rads;
 
     out->ax   =  ay_b;
-    out->ay   = -az_b;
-    out->az   = -ax_b;
+    out->ay   = -ax_b;
+    out->az   =  az_b;
     out->gx   =  gy_b;
-    out->gy   = -gz_b;
-    out->gz   = -gx_b;
+    out->gy   = -gx_b;
+    out->gz   =  gz_b;
     out->t_us = (uint64_t)esp_timer_get_time();
 
     return AG_OK;
