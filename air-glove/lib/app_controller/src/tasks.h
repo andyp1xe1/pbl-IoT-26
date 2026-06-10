@@ -65,6 +65,13 @@ extern std::atomic<int16_t>  g_tele_accel_mg[3];
 extern std::atomic<int16_t>  g_tele_gyro_mdps[3];
 extern std::atomic<uint16_t> g_tele_touch_raw[4];
 
+/* ── Gyro zero-rate bias (milli-deg/s, glove frame) ────────────────────────
+ * Set by t_cfg when CMD_CALIBRATE_IMU runs (50-sample average of idle gyro).
+ * Read by t_motion to subtract before converting to rad/s for the mixer.
+ * Starts at zero (no correction) — valid from the first successful calibration.
+ * Shared as int16_t atomics; 16-bit aligned writes are lock-free on ESP32. */
+extern std::atomic<int16_t>  g_gyro_bias_mdps[3];
+
 /* Task entry points. */
 void t_imu_sample_fn(void *);
 void t_fusion_fn    (void *);

@@ -53,6 +53,20 @@ static inline bool is_button(uint8_t i) {
     return (kButtonMask & (uint8_t)(1u << i)) != 0;
 }
 
+/* Sample one capacitive pad kCalibSamples times and update its baseline +
+ * threshold.  Caller must ensure no finger is touching the pad.  Runs in
+ * ~10 ms (50 × 200 µs).  Safe to call from any task; the 16-bit writes to
+ * s_baseline / s_threshold are word-aligned and effectively atomic on ESP32. */
+static void calibrate_cap_pad(uint8_t i) {
+    uint32_t sum = 0;
+    for (uint8_t s = 0; s < kCalibSamples; ++s) {
+        sum += (uint16_t)touchRead(kGpio[i]);
+        delayMicroseconds(200);
+    }
+    s_baseline [i] = (uint16_t)(sum / kCalibSamples);
+    s_threshold[i] = apply_ratio(s_baseline[i]);
+}
+
 } /* namespace */
 
 extern "C" ag_result_t dd_touch_init(void) {
@@ -66,27 +80,17 @@ extern "C" ag_result_t dd_touch_init(void) {
         }
     }
 
-    /* Capacitive calibration for non-button pads (THUMB only).
-     * Prime the peripheral first — first reading after boot is often 0. */
+    /* Capacitive calibration: prime the peripheral first — first reading
+     * after boot is often 0. */
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
-        if (!is_button(i)) {
-            (void)touchRead(kGpio[i]);
-        }
+        if (!is_button(i)) (void)touchRead(kGpio[i]);
     }
     delay(10);
 
     bool cap_wiring_ok = true;
     for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
         if (is_button(i)) continue;
-
-        uint32_t sum = 0;
-        for (uint8_t s = 0; s < kCalibSamples; ++s) {
-            sum += (uint16_t)touchRead(kGpio[i]);
-            delayMicroseconds(200);
-        }
-        s_baseline [i] = (uint16_t)(sum / kCalibSamples);
-        s_threshold[i] = apply_ratio(s_baseline[i]);
-
+        calibrate_cap_pad(i);
         if (s_baseline[i] < 20) {
             printf("[dd_touch] WARN: capacitive pad %u baseline=%u is too low — "
                    "check wire on GPIO%u\n", i, s_baseline[i], kGpio[i]);
@@ -102,6 +106,22 @@ extern "C" ag_result_t dd_touch_init(void) {
            cap_wiring_ok ? "OK" : "CHECK WIRES");
 
     return AG_OK;
+}
+
+extern "C" ag_result_t dd_touch_recalibrate(void) {
+    if (!s_initialized) return AG_ERR_STATE;
+
+    bool wiring_ok = true;
+    for (uint8_t i = 0; i < TOUCH_PAD_COUNT; ++i) {
+        if (is_button(i)) continue;
+        calibrate_cap_pad(i);
+        if (s_baseline[i] < 20) wiring_ok = false;
+        printf("[dd_touch] recal pad %u: baseline=%u threshold=%u\n",
+               i, s_baseline[i], s_threshold[i]);
+    }
+
+    printf("[dd_touch] recalibrate %s\n", wiring_ok ? "OK" : "WARN low baseline");
+    return wiring_ok ? AG_OK : AG_ERR_IO;
 }
 
 extern "C" ag_result_t dd_touch_read(touch_sample_t *out) {

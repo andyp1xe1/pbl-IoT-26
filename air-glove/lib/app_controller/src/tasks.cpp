@@ -331,13 +331,12 @@ void t_motion_fn(void *)
                    c.sens_x_milli, c.sens_y_milli, (double)mc.deadzone_rad);
         }
 
-        /* Build the 9-axis signal vector: raw IMU read straight from the
-         * atomic snapshots t_imu_sample publishes, fused rates derived from
-         * the per-frame quaternion delta (gated on madgwick_on). */
+        /* Build the 9-axis signal vector: raw IMU snapshots minus the
+         * calibrated zero-rate bias (zero until CMD_CALIBRATE_IMU runs). */
         float signals[AG_MIX_COUNT];
-        signals[AG_MIX_GX] = (float)g_tele_gyro_mdps[0].load() * 1e-3f * kDegToRad;
-        signals[AG_MIX_GY] = (float)g_tele_gyro_mdps[1].load() * 1e-3f * kDegToRad;
-        signals[AG_MIX_GZ] = (float)g_tele_gyro_mdps[2].load() * 1e-3f * kDegToRad;
+        signals[AG_MIX_GX] = (float)(g_tele_gyro_mdps[0].load() - g_gyro_bias_mdps[0].load()) * 1e-3f * kDegToRad;
+        signals[AG_MIX_GY] = (float)(g_tele_gyro_mdps[1].load() - g_gyro_bias_mdps[1].load()) * 1e-3f * kDegToRad;
+        signals[AG_MIX_GZ] = (float)(g_tele_gyro_mdps[2].load() - g_gyro_bias_mdps[2].load()) * 1e-3f * kDegToRad;
         signals[AG_MIX_AX] = (float)g_tele_accel_mg[0].load()  * 1e-3f * 9.80665f;
         signals[AG_MIX_AY] = (float)g_tele_accel_mg[1].load()  * 1e-3f * 9.80665f;
         signals[AG_MIX_AZ] = (float)g_tele_accel_mg[2].load()  * 1e-3f * 9.80665f;
@@ -572,18 +571,44 @@ void t_cfg_fn(void *)
                 dd_ble_cfg_factory_reset();
                 dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
                 break;
-            case DD_BLE_CFG_CMD_RECAL_TOUCH:
-                /* dd_touch re-baselines at boot; runtime re-baseline is not yet
-                 * exposed (E04 backlog) — acknowledge so the UI completes. */
-                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
+            case DD_BLE_CFG_CMD_RECAL_TOUCH: {
+                /* Re-sample the capacitive baseline with the glove flat and
+                 * untouched.  dd_touch_recalibrate() runs ~10 ms per pad. */
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING, 0);
+                ag_result_t rc = dd_touch_recalibrate();
+                dd_ble_cfg_set_status(
+                    op,
+                    rc == AG_OK ? DD_BLE_CFG_ST_SUCCESS : DD_BLE_CFG_ST_FAIL,
+                    100);
                 break;
-            case DD_BLE_CFG_CMD_CALIBRATE_IMU:
-                for (int p = 0; p <= 100; p += 20) {
-                    dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING, (uint8_t)p);
-                    vTaskDelay(pdMS_TO_TICKS(300));
+            }
+            case DD_BLE_CFG_CMD_CALIBRATE_IMU: {
+                /* Collect 50 gyro snapshots at 20 ms intervals (= 1 second)
+                 * while the glove is flat and still.  The averages become the
+                 * zero-rate bias that t_motion subtracts before mixing. */
+                static constexpr int kCalSamples = 50;
+                dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING, 0);
+                double sum[3] = {0.0, 0.0, 0.0};
+                for (int i = 0; i < kCalSamples; ++i) {
+                    sum[0] += g_tele_gyro_mdps[0].load();
+                    sum[1] += g_tele_gyro_mdps[1].load();
+                    sum[2] += g_tele_gyro_mdps[2].load();
+                    if (i % 10 == 9) {
+                        dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_RUNNING,
+                                              (uint8_t)((i + 1) * 100 / kCalSamples));
+                    }
+                    vTaskDelay(pdMS_TO_TICKS(20));
                 }
+                g_gyro_bias_mdps[0].store((int16_t)(sum[0] / kCalSamples));
+                g_gyro_bias_mdps[1].store((int16_t)(sum[1] / kCalSamples));
+                g_gyro_bias_mdps[2].store((int16_t)(sum[2] / kCalSamples));
+                printf("[cfg] gyro bias set: %d %d %d mdps\n",
+                       (int)g_gyro_bias_mdps[0].load(),
+                       (int)g_gyro_bias_mdps[1].load(),
+                       (int)g_gyro_bias_mdps[2].load());
                 dd_ble_cfg_set_status(op, DD_BLE_CFG_ST_SUCCESS, 100);
                 break;
+            }
             case DD_BLE_CFG_CMD_SLEEP: {
                 /* Order matters: flip the flag first so the worker tasks stop
                  * touching the I2C bus (their next iteration sees g_sleeping

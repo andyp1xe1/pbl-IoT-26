@@ -41,6 +41,9 @@ std::atomic<int16_t>  g_tele_accel_mg[3]  = {};
 std::atomic<int16_t>  g_tele_gyro_mdps[3] = {};
 std::atomic<uint16_t> g_tele_touch_raw[4] = {};
 
+/* ── Gyro bias (definitions; declared in tasks.h) ───────────────────────── */
+std::atomic<int16_t>  g_gyro_bias_mdps[3] = {};
+
 /* ── File-scope helpers ────────────────────────────────────────────────── */
 namespace {
 
