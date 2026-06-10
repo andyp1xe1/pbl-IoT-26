@@ -1,10 +1,10 @@
 import { ExternalLink, GitFork } from "lucide-react";
 import { WorkScreen } from "../ui/WorkScreen";
-import ionAvatar from "../../../pfp/ion.jpg";
-import alexandraAvatar from "../../../pfp/alexandra.jpg";
-import andreiAvatar from "../../../pfp/andrei.jpg";
-import mihaiAvatar from "../../../pfp/mihai.jpg";
-import patriciaAvatar from "../../../pfp/patricia.png";
+import ionAvatar from "../assets/pfp/ion.jpg";
+import alexandraAvatar from "../assets/pfp/alexandra.jpg";
+import andreiAvatar from "../assets/pfp/andrei.jpg";
+import mihaiAvatar from "../assets/pfp/mihai.jpg";
+import patriciaAvatar from "../assets/pfp/patricia.png";
 
 const TEAM = [
   {
