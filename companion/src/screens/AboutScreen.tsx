@@ -1,119 +1,112 @@
-import { GitFork, ExternalLink } from "lucide-react";
-import { Section } from "../ui/Section";
+import { ExternalLink, GitFork } from "lucide-react";
 import { WorkScreen } from "../ui/WorkScreen";
-import { store, useAppState } from "../state/store";
-
-const APP_VERSION = "0.1.0";
+import ionAvatar from "../../../pfp/ion.jpg";
+import alexandraAvatar from "../../../pfp/alexandra.jpg";
+import andreiAvatar from "../../../pfp/andrei.jpg";
+import mihaiAvatar from "../../../pfp/mihai.jpg";
+import patriciaAvatar from "../../../pfp/patricia.png";
 
 const TEAM = [
-  "Cobzari Ion",
-  "Crudu Alexandra",
-  "Chicu Andrei",
-  "Gurduza Mihai",
-  "Moraru Patricia",
+  {
+    name: "Chicu Andrei",
+    role: "Companion app & BLE",
+    avatar: andreiAvatar,
+    github: "https://github.com/andyp1xe1",
+  },
+  {
+    name: "Moraru Patricia",
+    role: "Design & documentation",
+    avatar: patriciaAvatar,
+    github: "https://github.com/PatriciaMoraru",
+  },
+  {
+    name: "Gurduza Mihai",
+    role: "Hardware & enclosure",
+    avatar: mihaiAvatar,
+    github: "https://github.com/m33ga",
+  },
+  {
+    name: "Crudu Alexandra",
+    role: "UX, research & validation",
+    avatar: alexandraAvatar,
+    github: "https://github.com/crudualexandra",
+  },
+  {
+    name: "Cobzari Ion",
+    role: "Firmware & integration",
+    avatar: ionAvatar,
+    github: "https://github.com/Johnny-C-05",
+  },
 ];
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
+/* Caption is rendered only by WorkScreen's disconnected/sleeping placeholders,
+ * not on the connected About view. */
+const CAPTION = "The team and references behind AirGlove.";
 
 export function AboutScreen() {
   return (
-    <WorkScreen title="About">
+    <WorkScreen title="About" caption={CAPTION}>
       <AboutBody />
     </WorkScreen>
   );
 }
 
 function AboutBody() {
-  const info = useAppState().deviceInfo;
   return (
     <div className="about-layout">
-      {/* ── Hero ── */}
-      <div className="about-hero">
-        <div className="about-hero-name">AirGlove</div>
-        <span className="about-hero-version">v{APP_VERSION}</span>
+      <section className="about-hero" aria-label="AirGlove overview">
         <p className="about-hero-desc">
-          A gesture-driven wireless mouse built from an ESP32 glove with a
-          6-axis IMU and capacitive touch. Tilt your hand to move the cursor,
-          tap your fingers to click.
+          <strong>AirGlove</strong> is a wearable wireless mouse: move the cursor
+          by tilting your hand and trigger clicks with finger pads. Built as a
+          small, practical bridge between embedded sensing and everyday
+          interaction.
         </p>
+      </section>
+
+      <div className="about-team-cloud">
+        {TEAM.map((member, i) => (
+          <a
+            key={member.name}
+            className={`about-team-orb about-team-orb-${i + 1}`}
+            href={member.github}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`${member.name} — ${member.role}`}
+          >
+            <span className="about-team-orb-avatar-wrap">
+              <img className="about-team-orb-avatar" src={member.avatar} alt={member.name} />
+            </span>
+            <span className="about-team-orb-name">{member.name}</span>
+          </a>
+        ))}
       </div>
 
-      {/* ── Team ── */}
-      <Section title="Built by" className="about-section-team">
-        <div className="about-team-grid">
-          {TEAM.map((name) => (
-            <div key={name} className="about-member-card">
-              <div className="about-member-avatar">{initials(name)}</div>
-              <span className="about-member-name">{name}</span>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      {/* ── Device info + factory reset ── */}
-      <Section title="Device" className="about-section-device">
-        <div className="about-device-grid">
-          <div className="about-device-row">
-            <span className="about-device-label">Manufacturer</span>
-            <span className="about-device-value">{info?.manufacturer ?? "—"}</span>
-          </div>
-          <div className="about-device-row">
-            <span className="about-device-label">Model</span>
-            <span className="about-device-value">{info?.model ?? "—"}</span>
-          </div>
-          <div className="about-device-row">
-            <span className="about-device-label">Firmware</span>
-            <span className="about-device-value">{info?.firmware ?? "—"}</span>
-          </div>
-          <button
-            className="about-device-reset"
-            onClick={() => void store.factoryReset()}
-          >
-            Factory reset
-          </button>
-        </div>
-      </Section>
-
-      {/* ── Links ── */}
-      <Section title="Links" className="about-section-links">
-        <div className="about-links-grid">
-          <a
-            className="about-link-card"
-            href="https://github.com/andyp1xe1/pbl-IoT-26"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span className="about-link-card-icon">
-              <GitFork size={20} strokeWidth={2} />
-            </span>
-            <span className="about-link-card-text">
-              <span className="about-link-card-label">Source code</span>
-              <span className="about-link-card-url">github.com</span>
-            </span>
-          </a>
-          <a
-            className="about-link-card"
-            href="https://airglove.chillguys.studio/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span className="about-link-card-icon">
-              <ExternalLink size={20} strokeWidth={2} />
-            </span>
-            <span className="about-link-card-text">
-              <span className="about-link-card-label">Project site</span>
-              <span className="about-link-card-url">airglove.chillguys.studio</span>
-            </span>
-          </a>
-        </div>
-      </Section>
+      <div className="about-link-cloud">
+        <a
+          className="about-link-orb"
+          href="https://github.com/andyp1xe1/pbl-IoT-26"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="github.com/andyp1xe1/pbl-IoT-26"
+        >
+          <span className="about-link-orb-icon">
+            <GitFork size={28} strokeWidth={2} />
+          </span>
+          <span className="about-link-orb-name">Source code</span>
+        </a>
+        <a
+          className="about-link-orb"
+          href="https://airglove.chillguys.studio/"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="airglove.chillguys.studio"
+        >
+          <span className="about-link-orb-icon">
+            <ExternalLink size={28} strokeWidth={2} />
+          </span>
+          <span className="about-link-orb-name">Project site</span>
+        </a>
+      </div>
     </div>
   );
 }
