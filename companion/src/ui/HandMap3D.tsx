@@ -208,7 +208,7 @@ function HandScene({ visualSel, onSelect, touch, thresholds }: SceneProps) {
       <directionalLight position={[-4, 2, 2]} intensity={0.4} color="#c8d0ff" />
       <directionalLight position={[0, -2, 3]} intensity={0.2} />
 
-      <Bounds fit clip observe margin={1.1}>
+      <Bounds fit clip observe margin={0.88}>
         <Suspense fallback={<LoadingRing />}>
           <HandModel
             selected={visualSel ?? -1}

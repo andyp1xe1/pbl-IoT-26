@@ -1136,15 +1136,18 @@ input[type="range"] {
 .hand3d-root {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  align-items: stretch;
+  gap: 12px;
   flex-shrink: 0;
+  width: 360px;
 }
 
-/* Canvas wrapper — LIGHT background, matches app surface */
+/* Canvas wrapper — grows to fill the grid row height so it always
+   matches the detail panel, regardless of how much content is on the right */
 .hand3d-canvas {
-  width: 260px;
-  height: 320px;
+  width: 100%;
+  flex: 1;
+  min-height: 340px;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--border, #e3e6f1);
@@ -1154,19 +1157,20 @@ input[type="range"] {
 
 /* Finger tab-strip */
 .hand3d-tabs {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  width: 100%;
 }
 
 .hand3d-tab {
-  padding: 4px 12px;
-  font-size: 11px;
+  padding: 8px 0;
+  font-size: 13px;
   font-weight: 600;
+  text-align: center;
   border-radius: 999px;
   border: 1.5px solid var(--border, #e3e6f1);
-  background: var(--surface-1, #fff);
+  background: var(--surface, #fff);
   color: var(--muted, #9398ae);
   cursor: pointer;
   transition: border-color 0.14s, color 0.14s, background 0.14s;
@@ -1190,23 +1194,24 @@ input[type="range"] {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 28px;
-  align-items: center;
-  padding: 20px 22px 0;
+  align-items: stretch;
+  padding: 22px 24px;
 }
 
 @media (max-width: 680px) {
   .click-map-layout {
     grid-template-columns: 1fr;
-    padding: 16px 16px 0;
+    padding: 16px;
   }
 
   .hand3d-root {
-    justify-self: center;
+    width: 100%;
+    align-self: center;
   }
 
   .hand3d-canvas {
-    width: 220px;
-    height: 270px;
+    flex: none;
+    height: 300px;
   }
 }
 
@@ -1217,7 +1222,6 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding-bottom: 20px;
 }
 
 .click-map-detail-header {
@@ -1260,6 +1264,14 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+/* Modifier finger row: label left, select right */
+.click-map-field--inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .click-map-field-label {
@@ -1308,6 +1320,45 @@ input[type="range"] {
   background: var(--surface, #fff);
   color: #4b56bd;
   box-shadow: 0 1px 4px rgba(94, 106, 210, 0.14);
+}
+
+.click-map-modifier-hint {
+  margin: 8px 2px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #9398ae);
+}
+
+.click-map-modifier-hint strong {
+  color: var(--text, #2b2f3c);
+  font-weight: 600;
+}
+
+/* Shown when the selected finger IS the modifier — action grid is hidden */
+.click-map-modifier-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-2, #f4f6fc);
+  border: 1.5px dashed var(--border, #e3e6f1);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted, #9398ae);
+}
+
+.click-map-modifier-notice strong {
+  color: var(--text, #2b2f3c);
+  font-weight: 600;
+}
+
+.click-map-modifier-notice-icon {
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 1px;
+  flex-shrink: 0;
+  color: #8b94e4;
 }
 
 /* action button grid — 2 equal columns, each button fixed height */
