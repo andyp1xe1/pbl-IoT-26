@@ -22,6 +22,7 @@ import {
 import { Section } from "../ui/Section";
 import { MotionMix } from "../ui/MotionMix";
 import { Slider } from "../ui/Slider";
+import { RotaryKnob } from "../ui/RotaryKnob";
 import { TouchBar } from "../ui/TouchBar";
 import { WorkScreen } from "../ui/WorkScreen";
 import { HandMap3D } from "../ui/HandMap3D";
@@ -145,7 +146,10 @@ function TuneBody() {
                 </select>
               </div>
 
-              {/* Action grid — hidden with a notice when this finger IS the modifier */}
+              {/* Action grid — hidden with a notice when this finger IS the modifier.
+                  The tab strip + hint render in every non-modifier state so the
+                  panel keeps the same height whether a modifier finger is set
+                  or not; visibility (not display) is what's toggled. */}
               <div className="click-map-field">
                 {selectedPad === cfg.modifierPad ? (
                   <div className="click-map-modifier-notice">
@@ -158,30 +162,37 @@ function TuneBody() {
                   </div>
                 ) : (
                   <>
-                    {altSlot >= 0 && (
-                      <>
-                        <div className="click-map-action-tabs">
-                          <button
-                            className={`click-map-action-tab${actionTab === "normal" ? " click-map-action-tab--active" : ""}`}
-                            onClick={() => setActionTab("normal")}
-                          >
-                            Normal
-                          </button>
-                          <button
-                            className={`click-map-action-tab${actionTab === "alt" ? " click-map-action-tab--active" : ""}`}
-                            onClick={() => setActionTab("alt")}
-                          >
-                            While {PAD_NAMES[cfg.modifierPad]} held
-                          </button>
-                        </div>
-                        <p className="click-map-modifier-hint">
-                          {actionTab === "normal"
-                            ? <>Tap <strong>{PAD_NAMES[selectedPad]}</strong> alone — {PAD_NAMES[cfg.modifierPad]} is not held.</>
-                            : <>Hold <strong>{PAD_NAMES[cfg.modifierPad]}</strong>, then tap <strong>{PAD_NAMES[selectedPad]}</strong> to fire this action.</>
-                          }
-                        </p>
-                      </>
-                    )}
+                    <div
+                      className={`click-map-tabs-slot${altSlot < 0 ? " click-map-tabs-slot--disabled" : ""}`}
+                    >
+                      <div className="click-map-action-tabs">
+                        <button
+                          className={`click-map-action-tab${actionTab === "normal" ? " click-map-action-tab--active" : ""}`}
+                          onClick={() => setActionTab("normal")}
+                          disabled={altSlot < 0}
+                        >
+                          Normal
+                        </button>
+                        <button
+                          className={`click-map-action-tab${actionTab === "alt" ? " click-map-action-tab--active" : ""}`}
+                          onClick={() => setActionTab("alt")}
+                          disabled={altSlot < 0}
+                        >
+                          {altSlot < 0
+                            ? "While modifier held"
+                            : `While ${PAD_NAMES[cfg.modifierPad]} held`}
+                        </button>
+                      </div>
+                      <p className="click-map-modifier-hint">
+                        {altSlot < 0 ? (
+                          <>Set a modifier finger above to enable a second action.</>
+                        ) : actionTab === "normal" ? (
+                          <>Tap <strong>{PAD_NAMES[selectedPad]}</strong> alone — {PAD_NAMES[cfg.modifierPad]} is not held.</>
+                        ) : (
+                          <>Hold <strong>{PAD_NAMES[cfg.modifierPad]}</strong>, then tap <strong>{PAD_NAMES[selectedPad]}</strong> to fire this action.</>
+                        )}
+                      </p>
+                    </div>
 
                     {(altSlot < 0 || actionTab === "normal") && (
                       <div className="click-map-action-grid">
@@ -259,12 +270,6 @@ function TuneBody() {
                   max={TOUCH_BAR_MAX}
                   invert
                 />
-                <span
-                  className={`click-map-thresh-live${scored ? " click-map-thresh-live--scored" : ""}`}
-                >
-                  Live reading {live} —{" "}
-                  {scored ? "below threshold, registering as press" : "above threshold, not pressed"}
-                </span>
               </div>
             </div>
 
@@ -305,6 +310,20 @@ function TuneBody() {
             display={`${cfg.debounceMs} ms`}
             onChange={(v) => store.updateConfigLocal({ debounceMs: v })}
           />
+          <div className="slider-row knob-row">
+            <span className="row-label">Wrist-roll comp</span>
+            <RotaryKnob
+              ariaLabel="Wrist-roll compensation"
+              value={cfg.wristRollCompMilli}
+              min={0}
+              max={1000}
+              step={10}
+              onChange={(v) => store.updateConfigLocal({ wristRollCompMilli: v })}
+            />
+            <span className="row-value">
+              {(cfg.wristRollCompMilli / 1000).toFixed(2)}
+            </span>
+          </div>
         </div>
       </section>
 

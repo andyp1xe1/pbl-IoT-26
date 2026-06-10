@@ -56,7 +56,6 @@ export function MotionMix({
     }
   };
   const betaPct = `${(cfg.madgwickBetaMilli / 300) * 100}%`;
-  const wristCompPct = `${(cfg.wristRollCompMilli / 1000) * 100}%`;
 
   return (
     <section className={className ? `section motion-mix ${className}` : "section motion-mix"}>
@@ -81,21 +80,6 @@ export function MotionMix({
               {(cfg.madgwickBetaMilli / 1000).toFixed(3)}
             </span>
           </div>
-          <div className="mix-beta-inline">
-            <span className="mix-beta-label">Wrist-roll comp</span>
-            <input
-              type="range"
-              min={0}
-              max={1000}
-              step={10}
-              value={cfg.wristRollCompMilli}
-              onChange={(e) => onChange({ wristRollCompMilli: Number(e.target.value) })}
-              style={{ "--pct": wristCompPct } as React.CSSProperties}
-            />
-            <span className="mix-beta-value">
-              {(cfg.wristRollCompMilli / 1000).toFixed(2)}
-            </span>
-          </div>
           <label className="motion-mix-toggle">
             <span>Madgwick fusion</span>
             <Switch
@@ -107,23 +91,17 @@ export function MotionMix({
         </header>
 
         <div className="mix-grid">
-          {/* Column headers */}
-          <div className="mix-col-head">
-            <span />
-            <span className="mix-col-label">
-              <MousePointer size={11} strokeWidth={2.5} />
-              Cursor X
-            </span>
-            <span className="mix-col-label">
-              <MousePointer size={11} strokeWidth={2.5} />
-              Cursor Y
-            </span>
-          </div>
-
-          {/* RAW IMU band card */}
           <div className="mix-band">
             <div className="mix-band-header">
               <span className="mix-group-label">Raw IMU</span>
+              <span className="mix-col-label">
+                <MousePointer size={11} strokeWidth={2.5} />
+                Cursor X
+              </span>
+              <span className="mix-col-label">
+                <MousePointer size={11} strokeWidth={2.5} />
+                Cursor Y
+              </span>
             </div>
             <div className="mix-band-rows">
               {rawAxes.map((axis) => (
@@ -146,6 +124,14 @@ export function MotionMix({
               <span className="mix-group-label">
                 Fused
                 {!cfg.madgwickEnabled && <em className="mix-group-hint"> · disabled</em>}
+              </span>
+              <span className="mix-col-label">
+                <MousePointer size={11} strokeWidth={2.5} />
+                Cursor X
+              </span>
+              <span className="mix-col-label">
+                <MousePointer size={11} strokeWidth={2.5} />
+                Cursor Y
               </span>
             </div>
             <div className="mix-band-rows">
