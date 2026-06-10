@@ -6,6 +6,7 @@ import {
   ClickAction,
   NO_MODIFIER,
   PAD_NAMES,
+  type AgConfig,
 } from "../ble/types";
 import {
   Ban,
@@ -18,6 +19,20 @@ import {
   ArrowUpDown,
   type LucideIcon,
 } from "lucide-react";
+import { Section } from "../ui/Section";
+import { MotionMix } from "../ui/MotionMix";
+import { Slider } from "../ui/Slider";
+import { TouchBar } from "../ui/TouchBar";
+import { WorkScreen } from "../ui/WorkScreen";
+import { HandMap3D } from "../ui/HandMap3D";
+import { store, useAppState } from "../state/store";
+
+const CAPTION = "Adjust sensitivity, touch thresholds, and click mappings.";
+
+/* Cap-pad raw counts sit in the 0–~200 band (idle ~50–100, finger contact
+ * pulls toward zero). 300 leaves headroom for noisy baselines without
+ * throwing away resolution. */
+const TOUCH_BAR_MAX = 300;
 
 const ACTION_ICON: Record<ClickAction, LucideIcon> = {
   [ClickAction.None]: Ban,
@@ -29,14 +44,6 @@ const ACTION_ICON: Record<ClickAction, LucideIcon> = {
   [ClickAction.Clutch]: Globe,
   [ClickAction.ScrollMode]: ArrowUpDown,
 };
-import { Section } from "../ui/Section";
-import { Slider } from "../ui/Slider";
-import { TouchBar } from "../ui/TouchBar";
-import { WorkScreen } from "../ui/WorkScreen";
-import { HandMap3D } from "../ui/HandMap3D";
-import { store, useAppState } from "../state/store";
-
-const CAPTION = "Adjust sensitivity, touch thresholds, and click mappings.";
 
 const PRIMARY_OPTIONS: ClickAction[] = [
   ClickAction.None,
@@ -85,78 +92,70 @@ function TuneBody() {
 
   return (
     <>
-      <Section title="Pointer" className="tune-pointer">
-        <Slider
-          label="Sensitivity X"
-          min={200}
-          max={3000}
-          step={10}
-          value={cfg.sensXMilli}
-          display={`${(cfg.sensXMilli / 1000).toFixed(2)}×`}
-          onChange={(v) => store.updateConfigLocal({ sensXMilli: v })}
-        />
-        <Slider
-          label="Sensitivity Y"
-          min={200}
-          max={3000}
-          step={10}
-          value={cfg.sensYMilli}
-          display={`${(cfg.sensYMilli / 1000).toFixed(2)}×`}
-          onChange={(v) => store.updateConfigLocal({ sensYMilli: v })}
-        />
-        <Slider
-          label="Dead zone"
-          min={0}
-          max={300}
-          step={1}
-          value={cfg.deadzoneMrad}
-          display={`${(cfg.deadzoneMrad / 1000).toFixed(3)} rad`}
-          onChange={(v) => store.updateConfigLocal({ deadzoneMrad: v })}
-        />
-      </Section>
+      {/* ── Controls (dead zone + debounce) ── teammate addition */}
+      <section className="section tune-controls">
+        <div className="section-head">
+          <h2 className="section-title">Controls</h2>
+        </div>
+        <div className="card tune-controls-card">
+          <Slider
+            label="Dead zone"
+            min={0}
+            max={300}
+            step={1}
+            value={cfg.deadzoneMrad}
+            display={`${(cfg.deadzoneMrad / 1000).toFixed(3)} rad`}
+            onChange={(v) => store.updateConfigLocal({ deadzoneMrad: v })}
+          />
+          <Slider
+            label="Debounce"
+            min={5}
+            max={200}
+            step={1}
+            value={cfg.debounceMs}
+            display={`${cfg.debounceMs} ms`}
+            onChange={(v) => store.updateConfigLocal({ debounceMs: v })}
+          />
+        </div>
+      </section>
 
-      <Section title="Fusion & input" className="tune-fusion">
-        <Slider
-          label="Madgwick β"
-          min={0}
-          max={300}
-          step={1}
-          value={cfg.madgwickBetaMilli}
-          display={`${(cfg.madgwickBetaMilli / 1000).toFixed(3)}`}
-          onChange={(v) => store.updateConfigLocal({ madgwickBetaMilli: v })}
-        />
-        <Slider
-          label="Debounce"
-          min={5}
-          max={200}
-          step={1}
-          value={cfg.debounceMs}
-          display={`${cfg.debounceMs} ms`}
-          onChange={(v) => store.updateConfigLocal({ debounceMs: v })}
-        />
-      </Section>
+      {/* ── Motion mix (sensitivity / fusion) ── teammate addition */}
+      <MotionMix
+        cfg={cfg}
+        onChange={(patch: Partial<AgConfig>) => store.updateConfigLocal(patch)}
+        className="tune-mix"
+      />
 
-      <Section title="Touch — live & thresholds" className="tune-touch">
+      {/* ── Buttons: live bars + per-pad threshold ── teammate addition.
+           Note: use per-iteration lv/thr, not the selected-pad live/thresh. */}
+      <Section title="Buttons" className="tune-buttons">
+        <div className="buttons-head">
+          <span />
+          <span className="buttons-col-label">Live</span>
+          <span className="buttons-col-label">Threshold</span>
+          <span className="buttons-col-label">Action</span>
+        </div>
         {PAD_NAMES.map((name, i) => {
           const lv = s.telemetry?.touch[i] ?? 0;
           const thr = cfg.touchThreshold[i];
           return (
-            <div key={name} className="touch-tune">
+            <div key={name} className="button-row">
+              <span className="button-row-label">{name}</span>
               <TouchBar
-                label={name}
+                label=""
                 value={lv}
                 threshold={thr}
-                max={4095}
+                max={TOUCH_BAR_MAX}
                 invert
               />
-              <div className="touch-tune-thresh">
-                <span className="touch-tune-thresh-label">Threshold</span>
+              <div className="button-row-thresh">
                 <input
                   type="range"
                   min={1}
-                  max={4095}
-                  step={10}
+                  max={TOUCH_BAR_MAX}
+                  step={1}
                   value={thr}
+                  aria-label={`${name} threshold`}
                   onChange={(e) => {
                     const arr = [
                       ...cfg.touchThreshold,
@@ -165,16 +164,25 @@ function TuneBody() {
                     store.updateConfigLocal({ touchThreshold: arr });
                   }}
                 />
-                <span className="touch-tune-thresh-value">{thr}</span>
+                <span className="button-row-thresh-value">{thr}</span>
               </div>
+              <ActionSelect
+                value={cfg.clickAction[i]}
+                options={PRIMARY_OPTIONS}
+                onChange={(a) => {
+                  const arr = [...cfg.clickAction] as typeof cfg.clickAction;
+                  arr[i] = a;
+                  store.updateConfigLocal({ clickAction: arr });
+                }}
+              />
             </div>
           );
         })}
       </Section>
 
+      {/* ── Click mapping: 3D hand picker + per-finger detail ── our addition */}
       <Section title="Click mapping" className="tune-click">
         <div className="click-map-layout">
-          {/* ── Left: 3D hand picker ── */}
           <HandMap3D
             selected={selectedPad}
             onSelect={setSelectedPad}
@@ -183,7 +191,6 @@ function TuneBody() {
             actions={cfg.clickAction}
           />
 
-          {/* ── Right: per-finger detail panel ── */}
           <div className="click-map-detail">
             <div className="click-map-detail-header">
               <span className="click-map-detail-name">
@@ -195,7 +202,7 @@ function TuneBody() {
             </div>
 
             <div className="click-map-detail-body">
-              {/* ── Modifier finger ── sits above action so the tab strip makes sense */}
+              {/* Modifier finger — above action so the tab strip it controls is right below */}
               <div className="click-map-field click-map-field--inline">
                 <span className="click-map-field-label" style={{ marginBottom: 0 }}>
                   Modifier finger
@@ -225,7 +232,7 @@ function TuneBody() {
                 </select>
               </div>
 
-              {/* ── Action grid (with optional tab strip) ── */}
+              {/* Action grid — hidden with a notice when this finger IS the modifier */}
               <div className="click-map-field">
                 {selectedPad === cfg.modifierPad ? (
                   <div className="click-map-modifier-notice">
@@ -310,7 +317,7 @@ function TuneBody() {
                 )}
               </div>
 
-              {/* ── Touch threshold ── per-finger, separate concern */}
+              {/* Touch threshold — per-finger calibration */}
               <div className="click-map-field">
                 <div className="click-map-thresh-header">
                   <span className="click-map-field-label">
@@ -322,8 +329,8 @@ function TuneBody() {
                   type="range"
                   className="click-map-thresh-slider"
                   min={1}
-                  max={4095}
-                  step={10}
+                  max={TOUCH_BAR_MAX}
+                  step={1}
                   value={thresh}
                   onChange={(e) => {
                     const arr = [

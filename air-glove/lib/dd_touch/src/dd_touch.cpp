@@ -29,9 +29,9 @@ namespace {
 static const uint8_t kGpio[TOUCH_PAD_COUNT] = { 4, 14, 15, 13 };
 
 /* Pads backed by physical buttons (INPUT_PULLUP, active-LOW).
- * Bit N = pad N uses digitalRead instead of touchRead. */
-static constexpr uint8_t kButtonMask =
-    (1u << TOUCH_PAD_INDEX) | (1u << TOUCH_PAD_MIDDLE) | (1u << TOUCH_PAD_RING);
+ * Bit N = pad N uses digitalRead instead of touchRead.
+ * Empty mask = all four pads are capacitive (touchRead on T0/T6/T3/T4). */
+static constexpr uint8_t kButtonMask = 0;
 
 /* ── Capacitive-touch settings (THUMB only) ───────────────────────────── */
 

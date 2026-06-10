@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#6e84ce"/>
+  <g fill="#ecedf6" font-family="'Unbounded', 'Inter', system-ui, sans-serif" font-weight="800" text-anchor="middle">
+    <text x="256" y="248" font-size="116" letter-spacing="-3">AIR</text>
+    <text x="256" y="358" font-size="92" letter-spacing="-2">GLOVE</text>
+  </g>
+</svg>

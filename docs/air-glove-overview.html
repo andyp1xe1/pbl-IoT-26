@@ -1,0 +1,547 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2026-05-16 Sat 15:07 -->
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Air Glove Code Overview</title>
+<meta name="author" content="OpenAI" />
+<meta name="generator" content="Org Mode" />
+<style type="text/css">
+  #content { max-width: 60em; margin: auto; }
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #e6e6e6;
+    border-radius: 3px;
+    background-color: #f2f2f2;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: auto;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    top: -8px;
+    right: 12px;
+    padding: 3px;
+    color: #555;
+    background-color: #f2f2f299;
+  }
+  pre.src:hover:before { display: inline; margin-top: 14px;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-authinfo::before { content: 'Authinfo'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'Javascript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .equation-container {
+    display: table;
+    text-align: center;
+    width: 100%;
+  }
+  .equation {
+    vertical-align: middle;
+  }
+  .equation-label {
+    display: table-cell;
+    text-align: right;
+    vertical-align: middle;
+  }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { }
+</style>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; color: #24292f; background: #ffffff; }
+#content { max-width: 860px; margin: 40px auto; padding: 0 24px; }
+.title { text-align: left; font-size: 2.2rem; margin-bottom: 0.25rem; }
+h1, h2, h3, h4 { color: #1f2328; margin-top: 1.5em; margin-bottom: 0.6em; }
+h2 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
+p, li { font-size: 16px; }
+code, pre { font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; }
+code { background: #f6f8fa; padding: 0.15em 0.35em; border-radius: 6px; }
+pre { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 16px; overflow-x: auto; }
+table { border-collapse: collapse; }
+th, td { border: 1px solid #d0d7de; padding: 6px 12px; }
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+ul, ol { padding-left: 1.5em; }
+</style>
+</head>
+<body>
+<div id="content" class="content">
+<h1 class="title">Air Glove Code Overview</h1>
+<div id="table-of-contents" role="doc-toc">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents" role="doc-toc">
+<ul>
+<li><a href="#orga85a228">What it is</a></li>
+<li><a href="#org5be03cd">Top-level structure</a></li>
+<li><a href="#org522b18d">Architecture</a>
+<ul>
+<li><a href="#orgb16e795">1. Config and shared types</a></li>
+<li><a href="#org2ddfd85">2. Drivers (<code>dd_*</code>)</a></li>
+<li><a href="#org8baa8de">3. Services (<code>srv_*</code>)</a></li>
+<li><a href="#org942d579">4. App controller</a></li>
+</ul>
+</li>
+<li><a href="#org9ef7268">Runtime dataflow</a></li>
+<li><a href="#org6b983e5">Entry point</a></li>
+<li><a href="#org1bfbb4a">Build and test setup</a>
+<ul>
+<li><a href="#org8678d2d"><code>env:esp32dev</code></a></li>
+<li><a href="#org358962a"><code>env:native</code></a></li>
+</ul>
+</li>
+<li><a href="#org78af93f">Testing</a></li>
+<li><a href="#orgfccfc51">Notable strengths</a></li>
+<li><a href="#orgaeca4b0">Implementation notes</a></li>
+<li><a href="#org2ff9217">Summary</a></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-orga85a228" class="outline-2">
+<h2 id="orga85a228">What it is</h2>
+<div class="outline-text-2" id="text-orga85a228">
+<p>
+An ESP32/PlatformIO firmware project for an <i>air mouse glove</i> that:
+</p>
+<ul class="org-ul">
+<li>reads MPU6050 IMU motion</li>
+<li>reads capacitive touch pads on fingers</li>
+<li>fuses orientation</li>
+<li>maps motion to mouse cursor deltas</li>
+<li>sends them as a BLE HID mouse</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-org5be03cd" class="outline-2">
+<h2 id="org5be03cd">Top-level structure</h2>
+<div class="outline-text-2" id="text-org5be03cd">
+<dl class="org-dl">
+<dt><code>air-glove/platformio.ini</code></dt><dd>build and test configuration</dd>
+<dt><code>air-glove/src/main.cpp</code></dt><dd>tiny boot entry point</dd>
+<dt><code>air-glove/lib/app_config/</code></dt><dd>shared types and pin definitions</dd>
+<dt><code>air-glove/lib/dd_*/</code></dt><dd>hardware and device drivers</dd>
+<dt><code>air-glove/lib/srv_*/</code></dt><dd>pure logic services</dd>
+<dt><code>air-glove/lib/app_controller/</code></dt><dd>orchestration and RTOS tasks</dd>
+<dt><code>air-glove/test/</code></dt><dd>unit and smoke tests</dd>
+</dl>
+</div>
+</div>
+<div id="outline-container-org522b18d" class="outline-2">
+<h2 id="org522b18d">Architecture</h2>
+<div class="outline-text-2" id="text-org522b18d">
+<p>
+The code is cleanly layered.
+</p>
+</div>
+<div id="outline-container-orgb16e795" class="outline-3">
+<h3 id="orgb16e795">1. Config and shared types</h3>
+<div class="outline-text-3" id="text-orgb16e795">
+<ul class="org-ul">
+<li><code>lib/app_config/include/ag_types.h</code>
+<ul class="org-ul">
+<li>core result codes</li>
+<li><code>imu_sample_t</code></li>
+<li><code>touch_sample_t</code></li>
+<li><code>hid_mouse_report_t</code></li>
+</ul></li>
+<li><code>lib/app_config/include/ag_pins.h</code>
+<ul class="org-ul">
+<li>ESP32 I2C pins</li>
+<li>touch channel mapping</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-org2ddfd85" class="outline-3">
+<h3 id="org2ddfd85">2. Drivers (<code>dd_*</code>)</h3>
+<div class="outline-text-3" id="text-org2ddfd85">
+<p>
+Hardware-facing and ESP32/Arduino-specific.
+</p>
+
+<ul class="org-ul">
+<li><code>lib/dd_mpu6050/</code>
+<ul class="org-ul">
+<li><code>dd_mpu6050_init()</code> configures MPU6050 over I2C</li>
+<li><code>dd_mpu6050_read()</code> returns accel/gyro in SI units</li>
+</ul></li>
+<li><code>lib/dd_touch/</code>
+<ul class="org-ul">
+<li>calibrates baselines</li>
+<li>reads capacitive touch values</li>
+<li>computes a <code>touched_mask</code></li>
+</ul></li>
+<li><code>lib/dd_ble_hid/</code>
+<ul class="org-ul">
+<li>sets up NimBLE HID mouse service</li>
+<li>advertises as <code>"AirGlove"</code></li>
+<li>sends 4-byte mouse reports</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-org8baa8de" class="outline-3">
+<h3 id="org8baa8de">3. Services (<code>srv_*</code>)</h3>
+<div class="outline-text-3" id="text-org8baa8de">
+<p>
+Pure C++ logic, intentionally host-testable.
+</p>
+
+<ul class="org-ul">
+<li><code>lib/srv_fusion/</code>
+<ul class="org-ul">
+<li>Madgwick-style 6-axis fusion</li>
+<li>IMU sample to quaternion</li>
+</ul></li>
+<li><code>lib/srv_motion/</code>
+<ul class="org-ul">
+<li>quaternion delta to <code>dx/dy</code></li>
+<li>deadzone, gain curve, cap, clutch support</li>
+</ul></li>
+<li><code>lib/srv_input/</code>
+<ul class="org-ul">
+<li>per-pad debounce FSM</li>
+<li>touch mask to press/release events</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-org942d579" class="outline-3">
+<h3 id="org942d579">4. App controller</h3>
+<div class="outline-text-3" id="text-org942d579">
+<ul class="org-ul">
+<li><code>lib/app_controller/src/app_controller.cpp</code>
+<ul class="org-ul">
+<li>initializes drivers and services</li>
+<li>creates queues</li>
+<li>starts 6 FreeRTOS tasks</li>
+</ul></li>
+<li><code>lib/app_controller/src/tasks.cpp</code>
+<ul class="org-ul">
+<li>task bodies and dataflow</li>
+</ul></li>
+</ul>
+</div>
+</div>
+</div>
+<div id="outline-container-org9ef7268" class="outline-2">
+<h2 id="org9ef7268">Runtime dataflow</h2>
+<div class="outline-text-2" id="text-org9ef7268">
+<p>
+Main pipeline in <code>tasks.cpp</code>:
+</p>
+
+<ol class="org-ol">
+<li><code>t_imu_sample</code>
+<ul class="org-ul">
+<li>polls MPU6050 at 100 Hz</li>
+<li>pushes <code>imu_sample_t</code> to <code>q_imu</code></li>
+</ul></li>
+
+<li><code>t_fusion</code>
+<ul class="org-ul">
+<li>consumes IMU data</li>
+<li>runs <code>srv_fusion_update</code></li>
+<li>pushes quaternion and timestamp to <code>q_orientation</code></li>
+</ul></li>
+
+<li><code>t_touch</code>
+<ul class="org-ul">
+<li>polls touch pads at 100 Hz</li>
+<li>runs <code>srv_input_process</code></li>
+<li>pushes button events to <code>q_buttons</code></li>
+</ul></li>
+
+<li><code>t_motion</code>
+<ul class="org-ul">
+<li>consumes orientation</li>
+<li>runs <code>srv_motion_update</code></li>
+<li>creates HID motion reports</li>
+<li>pushes to <code>q_hid</code></li>
+</ul></li>
+
+<li><code>t_app</code>
+<ul class="org-ul">
+<li>consumes touch/button events</li>
+<li>maps index/middle pads to left/right mouse buttons</li>
+<li>updates shared button state</li>
+<li>pushes button-only HID reports</li>
+</ul></li>
+
+<li><code>t_ble_hid</code>
+<ul class="org-ul">
+<li>owns the top-level BLE FSM</li>
+<li>waits for connection</li>
+<li>drains/coalesces <code>q_hid</code></li>
+<li>sends reports at about 125 Hz max</li>
+</ul></li>
+</ol>
+</div>
+</div>
+<div id="outline-container-org6b983e5" class="outline-2">
+<h2 id="org6b983e5">Entry point</h2>
+<div class="outline-text-2" id="text-org6b983e5">
+<ul class="org-ul">
+<li><code>src/main.cpp</code>
+<ul class="org-ul">
+<li>prints a boot log and calls <code>app_controller_start()</code></li>
+<li>actual work happens in RTOS tasks</li>
+</ul></li>
+</ul>
+
+<p>
+This keeps <code>main.cpp</code> tiny while the application logic lives in the controller and task layers.
+</p>
+</div>
+</div>
+<div id="outline-container-org1bfbb4a" class="outline-2">
+<h2 id="org1bfbb4a">Build and test setup</h2>
+<div class="outline-text-2" id="text-org1bfbb4a">
+<p>
+<code>platformio.ini</code> defines:
+</p>
+</div>
+<div id="outline-container-org8678d2d" class="outline-3">
+<h3 id="org8678d2d"><code>env:esp32dev</code></h3>
+<div class="outline-text-3" id="text-org8678d2d">
+<ul class="org-ul">
+<li>actual firmware target</li>
+<li>Arduino framework</li>
+<li>NimBLE dependency</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-org358962a" class="outline-3">
+<h3 id="org358962a"><code>env:native</code></h3>
+<div class="outline-text-3" id="text-org358962a">
+<ul class="org-ul">
+<li>host-side tests for <code>srv_*</code></li>
+<li>deliberately excludes <code>dd_*</code> and <code>app_controller</code></li>
+<li>reinforces separation between hardware code and pure logic</li>
+</ul>
+</div>
+</div>
+</div>
+<div id="outline-container-org78af93f" class="outline-2">
+<h2 id="org78af93f">Testing</h2>
+<div class="outline-text-2" id="text-org78af93f">
+<p>
+Good coverage for the pure logic libraries:
+</p>
+
+<ul class="org-ul">
+<li><code>test/test_srv_fusion/</code>
+<ul class="org-ul">
+<li>convergence, stability, free-fall, null args, performance sanity</li>
+</ul></li>
+<li><code>test/test_srv_motion/</code>
+<ul class="org-ul">
+<li>deadzone, sign, monotonicity, clutch, saturation</li>
+</ul></li>
+<li><code>test/test_srv_input/</code>
+<ul class="org-ul">
+<li>debounce, glitch filtering, press/release correctness</li>
+</ul></li>
+<li><code>test/test_app_controller/</code>
+<ul class="org-ul">
+<li>on-device smoke test for startup, tasks, and queues</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-orgfccfc51" class="outline-2">
+<h2 id="orgfccfc51">Notable strengths</h2>
+<div class="outline-text-2" id="text-orgfccfc51">
+<ul class="org-ul">
+<li>Strong layering
+<ul class="org-ul">
+<li><code>srv_*</code> code is pure and testable</li>
+<li>hardware dependencies are isolated in <code>dd_*</code></li>
+</ul></li>
+<li>Clear RTOS pipeline
+<ul class="org-ul">
+<li>queues between stages</li>
+<li>task responsibilities are easy to follow</li>
+</ul></li>
+<li>Good comments and intent documentation</li>
+<li>Defensive behavior
+<ul class="org-ul">
+<li>init failures reboot</li>
+<li>queue overflow uses drop-oldest</li>
+<li>motion and fusion guard against bad inputs</li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-orgaeca4b0" class="outline-2">
+<h2 id="orgaeca4b0">Implementation notes</h2>
+<div class="outline-text-2" id="text-orgaeca4b0">
+<ul class="org-ul">
+<li><code>dd_ble_hid_send()</code> comment says it returns <code>AG_ERR_STATE</code> when not connected, but the implementation silently returns <code>AG_OK</code> when disconnected.</li>
+<li><code>srv_motion</code> uses a small-angle approximation from quaternion delta; that is fine for small frame-to-frame motion, but less exact for large jumps.</li>
+<li><code>srv_input</code> contains placeholders for future chord support, but Phase I only emits simple press/release events.</li>
+<li><code>dd_touch</code> updates baseline only while not touched, which helps avoid drift during contact.</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-org2ff9217" class="outline-2">
+<h2 id="org2ff9217">Summary</h2>
+<div class="outline-text-2" id="text-org2ff9217">
+<p>
+<code>air-glove/</code> is a well-structured ESP32 firmware project that turns IMU orientation and finger touch input into a BLE HID mouse, with a clean split between drivers, pure logic services, and RTOS orchestration.
+</p>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="author">Author: OpenAI</p>
+<p class="date">Created: 2026-05-16 Sat 15:07</p>
+<p class="validation"><a href="https://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>

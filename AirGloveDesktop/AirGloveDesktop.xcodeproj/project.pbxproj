@@ -1,0 +1,444 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C0C713B22FD80A5000C9A1EF /* DevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713AE2FD8095E00C9A1EF /* DevicesView.swift */; };
+		C0C713B32FD80A5500C9A1EF /* TuneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713AF2FD8097300C9A1EF /* TuneView.swift */; };
+		C0C713B42FD80A5900C9A1EF /* CalibrateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713B02FD8098900C9A1EF /* CalibrateView.swift */; };
+		C0C713B52FD80A5E00C9A1EF /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713B12FD809A400C9A1EF /* AboutView.swift */; };
+		C0C713B62FD80A6200C9A1EF /* AirGloveBluetoothManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713AC2FD8092000C9A1EF /* AirGloveBluetoothManager.swift */; };
+		C0C713B72FD80A6800C9A1EF /* AirGloveSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713AD2FD8093A00C9A1EF /* AirGloveSettings.swift */; };
+		C0C713BC2FD80B9500C9A1EF /* AirGloveDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713BB2FD80B9300C9A1EF /* AirGloveDevice.swift */; };
+		C0C713BE2FD80D0800C9A1EF /* AirGloveSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713BD2FD80D0500C9A1EF /* AirGloveSettingsStore.swift */; };
+		C0C713C02FD80DF500C9A1EF /* AirGloveCalibrationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713BF2FD80DF400C9A1EF /* AirGloveCalibrationStore.swift */; };
+		C0C713C22FD80EA600C9A1EF /* AirGloveBLEProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713C12FD80EA400C9A1EF /* AirGloveBLEProtocol.swift */; };
+		C0C713C42FD80EC400C9A1EF /* AirGloveTelemetryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C713C32FD80EC200C9A1EF /* AirGloveTelemetryStore.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		C0C713982FD8068500C9A1EF /* AirGloveDesktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirGloveDesktop.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0C713AC2FD8092000C9A1EF /* AirGloveBluetoothManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirGloveBluetoothManager.swift; sourceTree = "<group>"; };
+		C0C713AD2FD8093A00C9A1EF /* AirGloveSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirGloveSettings.swift; sourceTree = "<group>"; };
+		C0C713AE2FD8095E00C9A1EF /* DevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesView.swift; sourceTree = "<group>"; };
+		C0C713AF2FD8097300C9A1EF /* TuneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuneView.swift; sourceTree = "<group>"; };
+		C0C713B02FD8098900C9A1EF /* CalibrateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrateView.swift; sourceTree = "<group>"; };
+		C0C713B12FD809A400C9A1EF /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		C0C713BB2FD80B9300C9A1EF /* AirGloveDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirGloveDevice.swift; sourceTree = "<group>"; };
+		C0C713BD2FD80D0500C9A1EF /* AirGloveSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirGloveSettingsStore.swift; sourceTree = "<group>"; };
+		C0C713BF2FD80DF400C9A1EF /* AirGloveCalibrationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirGloveCalibrationStore.swift; sourceTree = "<group>"; };
+		C0C713C12FD80EA400C9A1EF /* AirGloveBLEProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirGloveBLEProtocol.swift; sourceTree = "<group>"; };
+		C0C713C32FD80EC200C9A1EF /* AirGloveTelemetryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirGloveTelemetryStore.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C0C713A72FD807EC00C9A1EF /* Exceptions for "AirGloveDesktop" folder in "AirGloveDesktop" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C0C713972FD8068500C9A1EF /* AirGloveDesktop */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		C0C7139A2FD8068500C9A1EF /* AirGloveDesktop */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C0C713A72FD807EC00C9A1EF /* Exceptions for "AirGloveDesktop" folder in "AirGloveDesktop" target */,
+			);
+			path = AirGloveDesktop;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C0C713952FD8068500C9A1EF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		C0C7138F2FD8068500C9A1EF = {
+			isa = PBXGroup;
+			children = (
+				C0C713AA2FD808E300C9A1EF /* Bluetooth */,
+				C0C713AB2FD808F300C9A1EF /* Views */,
+				C0C713A82FD808CB00C9A1EF /* Models */,
+				C0C7139A2FD8068500C9A1EF /* AirGloveDesktop */,
+				C0C713992FD8068500C9A1EF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C0C713992FD8068500C9A1EF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C0C713982FD8068500C9A1EF /* AirGloveDesktop.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C0C713A82FD808CB00C9A1EF /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				C0C713C32FD80EC200C9A1EF /* AirGloveTelemetryStore.swift */,
+				C0C713BF2FD80DF400C9A1EF /* AirGloveCalibrationStore.swift */,
+				C0C713BD2FD80D0500C9A1EF /* AirGloveSettingsStore.swift */,
+				C0C713BB2FD80B9300C9A1EF /* AirGloveDevice.swift */,
+				C0C713AD2FD8093A00C9A1EF /* AirGloveSettings.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		C0C713AA2FD808E300C9A1EF /* Bluetooth */ = {
+			isa = PBXGroup;
+			children = (
+				C0C713C12FD80EA400C9A1EF /* AirGloveBLEProtocol.swift */,
+				C0C713AC2FD8092000C9A1EF /* AirGloveBluetoothManager.swift */,
+			);
+			path = Bluetooth;
+			sourceTree = "<group>";
+		};
+		C0C713AB2FD808F300C9A1EF /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				C0C713B12FD809A400C9A1EF /* AboutView.swift */,
+				C0C713B02FD8098900C9A1EF /* CalibrateView.swift */,
+				C0C713AF2FD8097300C9A1EF /* TuneView.swift */,
+				C0C713AE2FD8095E00C9A1EF /* DevicesView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C0C713972FD8068500C9A1EF /* AirGloveDesktop */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0C713A32FD8068700C9A1EF /* Build configuration list for PBXNativeTarget "AirGloveDesktop" */;
+			buildPhases = (
+				C0C713942FD8068500C9A1EF /* Sources */,
+				C0C713952FD8068500C9A1EF /* Frameworks */,
+				C0C713962FD8068500C9A1EF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C0C7139A2FD8068500C9A1EF /* AirGloveDesktop */,
+			);
+			name = AirGloveDesktop;
+			packageProductDependencies = (
+			);
+			productName = AirGloveDesktop;
+			productReference = C0C713982FD8068500C9A1EF /* AirGloveDesktop.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C0C713902FD8068500C9A1EF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					C0C713972FD8068500C9A1EF = {
+						CreatedOnToolsVersion = 26.2;
+					};
+				};
+			};
+			buildConfigurationList = C0C713932FD8068500C9A1EF /* Build configuration list for PBXProject "AirGloveDesktop" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = C0C7138F2FD8068500C9A1EF;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C0C713992FD8068500C9A1EF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C0C713972FD8068500C9A1EF /* AirGloveDesktop */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C0C713962FD8068500C9A1EF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C0C713942FD8068500C9A1EF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0C713B62FD80A6200C9A1EF /* AirGloveBluetoothManager.swift in Sources */,
+				C0C713BE2FD80D0800C9A1EF /* AirGloveSettingsStore.swift in Sources */,
+				C0C713B32FD80A5500C9A1EF /* TuneView.swift in Sources */,
+				C0C713B22FD80A5000C9A1EF /* DevicesView.swift in Sources */,
+				C0C713BC2FD80B9500C9A1EF /* AirGloveDevice.swift in Sources */,
+				C0C713B72FD80A6800C9A1EF /* AirGloveSettings.swift in Sources */,
+				C0C713C22FD80EA600C9A1EF /* AirGloveBLEProtocol.swift in Sources */,
+				C0C713B42FD80A5900C9A1EF /* CalibrateView.swift in Sources */,
+				C0C713B52FD80A5E00C9A1EF /* AboutView.swift in Sources */,
+				C0C713C42FD80EC400C9A1EF /* AirGloveTelemetryStore.swift in Sources */,
+				C0C713C02FD80DF500C9A1EF /* AirGloveCalibrationStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		C0C713A12FD8068700C9A1EF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = JU394TA36T;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		C0C713A22FD8068700C9A1EF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = JU394TA36T;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		C0C713A42FD8068700C9A1EF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JU394TA36T;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AirGloveDesktop/Info.plist;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AirGloveDesktop uses Bluetooth to scan and connect to your Air Glove.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanda.AirGloveDesktop;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C0C713A52FD8068700C9A1EF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JU394TA36T;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AirGloveDesktop/Info.plist;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AirGloveDesktop uses Bluetooth to scan and connect to your Air Glove.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanda.AirGloveDesktop;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C0C713932FD8068500C9A1EF /* Build configuration list for PBXProject "AirGloveDesktop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0C713A12FD8068700C9A1EF /* Debug */,
+				C0C713A22FD8068700C9A1EF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C0C713A32FD8068700C9A1EF /* Build configuration list for PBXNativeTarget "AirGloveDesktop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0C713A42FD8068700C9A1EF /* Debug */,
+				C0C713A52FD8068700C9A1EF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C0C713902FD8068500C9A1EF /* Project object */;
+}

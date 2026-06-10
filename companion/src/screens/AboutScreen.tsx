@@ -1,4 +1,3 @@
-import { Command } from "../ble/types";
 import { Row, Section } from "../ui/Section";
 import { WorkScreen } from "../ui/WorkScreen";
 import { store, useAppState } from "../state/store";
@@ -23,7 +22,7 @@ function AboutBody() {
       <div className="card-actions">
         <button
           className="btn btn-ghost-danger"
-          onClick={() => void store.sendCommand(Command.FactoryReset)}
+          onClick={() => void store.factoryReset()}
         >
           Factory reset
         </button>

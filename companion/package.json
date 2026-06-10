@@ -10,7 +10,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "deploy": "npm run build && wrangler deploy",
+    "cf:dev": "npm run build && wrangler dev"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
@@ -29,6 +31,7 @@
     "cross-env": "^10.1.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.0",
+    "vite-plugin-pwa": "^0.20.5",
     "vitest": "^2.0.5"
   }
 }

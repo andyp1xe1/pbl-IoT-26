@@ -16,8 +16,14 @@
 
 static touch_sample_t make_touch(uint8_t mask, uint64_t t_us)
 {
+    /* Match dd_touch's normalised scale: 0 = pad below threshold (pressed),
+     * 4095 = open. srv_input compares raw against its per-pad threshold,
+     * so leaving every pad at a single low value (the old test fixture's
+     * raw=50) would silently fire every pad on every tick. */
     touch_sample_t s;
-    for (int i = 0; i < TOUCH_PAD_COUNT; ++i) s.raw[i] = 50;  /* arbitrary */
+    for (int i = 0; i < TOUCH_PAD_COUNT; ++i) {
+        s.raw[i] = (mask & (uint8_t)(1u << i)) ? 0u : 4095u;
+    }
     s.touched_mask = mask;
     s.t_us         = t_us;
     return s;

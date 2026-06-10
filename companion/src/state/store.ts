@@ -293,6 +293,26 @@ class Store {
     this.patch({ configDirtyLocal: false });
   }
 
+  /** Factory reset: tell the firmware to wipe NVS + restore builtin
+   *  defaults, then re-read the config characteristic so the Tune sliders
+   *  immediately reflect the new values. The firmware reseeds the config
+   *  characteristic synchronously inside the command handler, but does not
+   *  send a notify — so without this re-read the UI would keep showing
+   *  pre-reset state for the lifetime of the connection. */
+  async factoryReset() {
+    await this.sendCommand(Command.FactoryReset);
+    // Tiny settle: the cmd handler runs on t_cfg's next iteration which can
+    // be up to one telemetry period away (250 ms at IDLE). 300 ms covers
+    // the worst case without making the user wait perceptibly.
+    await new Promise((r) => setTimeout(r, 300));
+    try {
+      const config = await this.client.readConfig();
+      this.patch({ config, configDirtyLocal: false });
+    } catch (err) {
+      this.patch({ error: errorMessage(err) });
+    }
+  }
+
   async sendCommand(opcode: Command) {
     try {
       await this.client.sendCommand(opcode);
