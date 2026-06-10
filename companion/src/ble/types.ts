@@ -29,7 +29,7 @@ export const ALT_FORBIDDEN: ReadonlySet<ClickAction> = new Set([
 /** Sentinel value (matches AG_NO_MODIFIER on the firmware side). */
 export const NO_MODIFIER = 0xff;
 
-export const PAD_NAMES: readonly string[] = ["Thumb", "Index", "Middle", "Ring"];
+export const PAD_NAMES: readonly string[] = ["Index", "Middle", "Ring", "Pinky"];
 
 /** Motion-mix input axes — cursor-eligible signals only. Order is
  *  wire-stable; extending it requires a config schema bump. The Y-axis lanes
@@ -193,10 +193,10 @@ export function defaultConfig(): AgConfig {
     debounceMs: 15,
     touchThreshold: [20, 20, 20, 20],
     clickAction: [
-      ClickAction.None,
       ClickAction.Left,
       ClickAction.Right,
       ClickAction.ScrollMode,
+      ClickAction.None,
     ],
     modifierPad: NO_MODIFIER,
     clickActionAlt: [ClickAction.None, ClickAction.None, ClickAction.None],

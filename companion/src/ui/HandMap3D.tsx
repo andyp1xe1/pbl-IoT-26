@@ -10,7 +10,7 @@
 
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Center, Bounds } from "@react-three/drei";
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import type { GLTF } from "three-stdlib";
 import { PAD_NAMES } from "../ble/types";
@@ -18,14 +18,14 @@ import { PAD_NAMES } from "../ble/types";
 const MODEL_PATH = "/hand.glb";
 
 /**
- * Fill in mesh names after the debug step.
- * Each array can contain multiple mesh names for the same finger.
+ * Mesh names for the four wired pads: index, middle, ring, pinky.
+ * Thumb is intentionally not mapped anymore, so clicking it does nothing.
  */
 const FINGER_MESH_NAMES: Record<number, string[]> = {
-  0: ["Circle003"],   // Thumb
-  1: ["Circle003_1"], // Index
-  2: ["Circle003_2"], // Middle
-  3: ["Circle003_3"], // Ring
+  0: ["Circle003_1"], // Index
+  1: ["Circle003_2"], // Middle
+  2: ["Circle003_3"], // Ring
+  3: ["Circle003_4"], // Pinky
 };
 
 /** Click any mesh while this is true to log its name to the console. */
@@ -134,7 +134,7 @@ function HandModel({
     const orig = getPristine(mesh);
 
     if (pad < 0) {
-      // Skin/palm/wrist — fixed brightness boost, no glow.
+      // Skin/palm/wrist/unmapped thumb — fixed brightness boost, no glow.
       mat.color.copy(orig).multiplyScalar(SKIN_BOOST);
       mat.emissive.set(0, 0, 0);
       mat.emissiveIntensity = 0;
@@ -254,6 +254,12 @@ export interface HandMap3DProps {
 export function HandMap3D({ selected, onSelect }: HandMap3DProps) {
   const [visualSel, setVisualSel] = useState<number | null>(selected);
 
+  // Keep the highlighted model finger in sync when selection changes outside
+  // the model itself, e.g. from the tab/buttons below or parent controls.
+  useEffect(() => {
+    setVisualSel(selected);
+  }, [selected]);
+
   function handleSelect(pad: number) {
     setVisualSel(pad);
     onSelect(pad);
@@ -283,7 +289,7 @@ export function HandMap3D({ selected, onSelect }: HandMap3DProps) {
             role="tab"
             aria-selected={selected === i}
             className={`hand3d-tab${selected === i ? " hand3d-tab--active" : ""}`}
-            onClick={() => onSelect(i)}
+            onClick={() => handleSelect(i)}
           >
             {name}
           </button>
