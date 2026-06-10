@@ -1187,28 +1187,32 @@ input[type="range"] {
 /* ── Click-map layout: hand canvas left, detail panel right ── */
 
 .click-map-layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
   gap: 28px;
-  align-items: flex-start;
+  align-items: center;
   padding: 20px 22px 0;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 680px) {
   .click-map-layout {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
     padding: 16px 16px 0;
   }
 
   .hand3d-root {
-    align-self: center;
+    justify-self: center;
+  }
+
+  .hand3d-canvas {
+    width: 220px;
+    height: 270px;
   }
 }
 
 /* Detail panel */
 
 .click-map-detail {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1268,7 +1272,45 @@ input[type="range"] {
   display: block;
 }
 
-/* action button grid */
+/* tab strip above the action grid (visible only when modifier is set) */
+
+.click-map-action-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  background: var(--surface-2, #f4f6fc);
+  border: 1px solid var(--border, #e3e6f1);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.click-map-action-tab {
+  flex: 1;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted, #9398ae);
+  cursor: pointer;
+  transition: background 0.13s, color 0.13s;
+  white-space: nowrap;
+}
+
+.click-map-action-tab:hover {
+  background: var(--surface, #fff);
+  color: var(--text, #2b2f3c);
+}
+
+.click-map-action-tab--active {
+  background: var(--surface, #fff);
+  color: #4b56bd;
+  box-shadow: 0 1px 4px rgba(94, 106, 210, 0.14);
+}
+
+/* action button grid — 2 equal columns, each button fixed height */
 
 .click-map-action-grid {
   display: grid;
@@ -1276,23 +1318,32 @@ input[type="range"] {
   gap: 7px;
 }
 
+@media (max-width: 480px) {
+  .click-map-action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .click-map-action-btn {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 11px 13px;
-  font-size: 13.5px;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  font-size: 13px;
   font-weight: 500;
+  font-family: var(--font-ui);
   border-radius: 12px;
   border: 1.5px solid var(--border, #e3e6f1);
-  background: var(--surface-1, #fff);
-  color: var(--ink-2, #565d75);
+  background: var(--surface, #fff);
+  color: #565d75;
   cursor: pointer;
   text-align: left;
   transition: border-color 0.12s, background 0.12s, color 0.12s;
   white-space: nowrap;
   overflow: hidden;
-  line-height: 1.2;
+  line-height: 1;
+  min-width: 0;
 }
 
 .click-map-action-btn:hover {
@@ -1311,13 +1362,11 @@ input[type="range"] {
   color: #5e6ad2;
 }
 
+/* lucide icon inside action buttons */
 .click-map-action-icon {
-  font-size: 14px;
-  color: var(--muted, #9398ae);
   flex-shrink: 0;
-  width: 16px;
-  text-align: center;
-  line-height: 1;
+  color: var(--muted, #9398ae);
+  display: block;
 }
 
 /* save-button row inside the click-map detail column */
@@ -1326,9 +1375,7 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-top: 16px;
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
+  padding: 16px 0 0;
 }
 
 /* threshold sub-row */

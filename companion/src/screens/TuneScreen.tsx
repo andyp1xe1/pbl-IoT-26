@@ -7,16 +7,27 @@ import {
   NO_MODIFIER,
   PAD_NAMES,
 } from "../ble/types";
+import {
+  Ban,
+  MousePointerClick,
+  Mouse,
+  CircleDot,
+  ArrowUp,
+  ArrowDown,
+  Globe,
+  ArrowUpDown,
+  type LucideIcon,
+} from "lucide-react";
 
-const ACTION_ICON: Record<ClickAction, string> = {
-  [ClickAction.None]: "○",
-  [ClickAction.Left]: "◄",
-  [ClickAction.Right]: "►",
-  [ClickAction.Middle]: "◉",
-  [ClickAction.ScrollUp]: "↑",
-  [ClickAction.ScrollDown]: "↓",
-  [ClickAction.Clutch]: "⊕",
-  [ClickAction.ScrollMode]: "⇅",
+const ACTION_ICON: Record<ClickAction, LucideIcon> = {
+  [ClickAction.None]: Ban,
+  [ClickAction.Left]: MousePointerClick,
+  [ClickAction.Right]: Mouse,
+  [ClickAction.Middle]: CircleDot,
+  [ClickAction.ScrollUp]: ArrowUp,
+  [ClickAction.ScrollDown]: ArrowDown,
+  [ClickAction.Clutch]: Globe,
+  [ClickAction.ScrollMode]: ArrowUpDown,
 };
 import { Row, Section } from "../ui/Section";
 import { Slider } from "../ui/Slider";
@@ -55,6 +66,7 @@ function TuneBody() {
   const cfg = s.config;
   const dirty = s.configDirtyLocal || (cfg.flags & CONFIG_FLAG_DIRTY) !== 0;
   const [selectedPad, setSelectedPad] = useState(1);
+  const [actionTab, setActionTab] = useState<"normal" | "alt">("normal");
 
   const altPads =
     cfg.modifierPad === NO_MODIFIER
@@ -184,52 +196,69 @@ function TuneBody() {
 
             <div className="click-map-detail-body">
               <div className="click-map-field">
-                <span className="click-map-field-label">Action</span>
-                <div className="click-map-action-grid">
-                  {PRIMARY_OPTIONS.map((a) => (
+                {/* Tab strip — only shown when a modifier finger is set */}
+                {altSlot >= 0 && (
+                  <div className="click-map-action-tabs">
                     <button
-                      key={a}
-                      className={`click-map-action-btn${cfg.clickAction[selectedPad] === a ? " click-map-action-btn--active" : ""}`}
-                      onClick={() => {
-                        const arr = [
-                          ...cfg.clickAction,
-                        ] as typeof cfg.clickAction;
-                        arr[selectedPad] = a;
-                        store.updateConfigLocal({ clickAction: arr });
-                      }}
+                      className={`click-map-action-tab${actionTab === "normal" ? " click-map-action-tab--active" : ""}`}
+                      onClick={() => setActionTab("normal")}
                     >
-                      <span className="click-map-action-icon">{ACTION_ICON[a]}</span>
-                      {CLICK_ACTION_LABELS[a]}
+                      Normal
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              {altSlot >= 0 && (
-                <div className="click-map-field">
-                  <span className="click-map-field-label">
-                    Action (while modifier held)
-                  </span>
-                  <div className="click-map-action-grid">
-                    {ALT_OPTIONS.map((a) => (
-                      <button
-                        key={a}
-                        className={`click-map-action-btn${cfg.clickActionAlt[altSlot] === a ? " click-map-action-btn--active" : ""}`}
-                        onClick={() => {
-                          const arr = [
-                            ...cfg.clickActionAlt,
-                          ] as typeof cfg.clickActionAlt;
-                          arr[altSlot] = a;
-                          store.updateConfigLocal({ clickActionAlt: arr });
-                        }}
-                      >
-                        <span className="click-map-action-icon">{ACTION_ICON[a]}</span>
-                        {CLICK_ACTION_LABELS[a]}
-                      </button>
-                    ))}
+                    <button
+                      className={`click-map-action-tab${actionTab === "alt" ? " click-map-action-tab--active" : ""}`}
+                      onClick={() => setActionTab("alt")}
+                    >
+                      While {PAD_NAMES[cfg.modifierPad]} held
+                    </button>
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* Single action grid — content switches with tab */}
+                {(altSlot < 0 || actionTab === "normal") && (
+                  <div className="click-map-action-grid">
+                    {PRIMARY_OPTIONS.map((a) => {
+                      const Icon = ACTION_ICON[a];
+                      return (
+                        <button
+                          key={a}
+                          className={`click-map-action-btn${cfg.clickAction[selectedPad] === a ? " click-map-action-btn--active" : ""}`}
+                          onClick={() => {
+                            const arr = [...cfg.clickAction] as typeof cfg.clickAction;
+                            arr[selectedPad] = a;
+                            store.updateConfigLocal({ clickAction: arr });
+                          }}
+                        >
+                          <Icon className="click-map-action-icon" size={15} strokeWidth={2} />
+                          {CLICK_ACTION_LABELS[a]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {altSlot >= 0 && actionTab === "alt" && (
+                  <div className="click-map-action-grid">
+                    {ALT_OPTIONS.map((a) => {
+                      const Icon = ACTION_ICON[a];
+                      return (
+                        <button
+                          key={a}
+                          className={`click-map-action-btn${cfg.clickActionAlt[altSlot] === a ? " click-map-action-btn--active" : ""}`}
+                          onClick={() => {
+                            const arr = [...cfg.clickActionAlt] as typeof cfg.clickActionAlt;
+                            arr[altSlot] = a;
+                            store.updateConfigLocal({ clickActionAlt: arr });
+                          }}
+                        >
+                          <Icon className="click-map-action-icon" size={15} strokeWidth={2} />
+                          {CLICK_ACTION_LABELS[a]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               <div className="click-map-field">
                 <div className="click-map-thresh-header">
