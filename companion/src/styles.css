@@ -796,6 +796,21 @@ body {
   border-top: 1px solid var(--border);
 }
 
+.cal-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cal-hint {
+  margin: 0;
+  padding: 3px 4px 3px 10px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  border-left: 2px solid var(--border);
+}
+
 .btn {
   width: 100%;
   border: none;
@@ -869,6 +884,84 @@ body {
   margin: 0;
   padding: 16px 16px 16px 34px;
   line-height: 1.6;
+}
+
+/* ---------- Calibrate screen ---------- */
+
+.cal-steps {
+  list-style: none;
+  counter-reset: cal-step;
+  margin: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cal-steps li {
+  counter-increment: cal-step;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.cal-steps li::before {
+  content: counter(cal-step);
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.cal-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.cal-status-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.cal-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.cal-status-badge--idle {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.cal-status-badge--running {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.cal-status-badge--success {
+  background: #e6f7ef;
+  color: var(--good);
+}
+
+.cal-status-badge--fail {
+  background: #fdeaea;
+  color: var(--danger);
 }
 
 /* ---------- Sliders ---------- */

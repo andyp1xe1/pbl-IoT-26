@@ -1,5 +1,5 @@
 import { Command, StatusState } from "../ble/types";
-import { Row, Section } from "../ui/Section";
+import { Section } from "../ui/Section";
 import { StatBox, StatGrid } from "../ui/StatBox";
 import { WorkScreen } from "../ui/WorkScreen";
 import { store, useAppState } from "../state/store";
@@ -23,6 +23,58 @@ function CalibrateBody() {
 
   return (
     <>
+      <Section title="Procedure">
+        <ol className="steps cal-steps">
+          <li>Place the glove flat on a table.</li>
+          <li>Hold still for 3 seconds.</li>
+          <li>Tap Calibrate IMU below.</li>
+        </ol>
+        {st && (
+          <div className="cal-status-row">
+            <span className="cal-status-label">{opcodeLabel(st.lastOpcode)}</span>
+            <span className={`cal-status-badge cal-status-badge--${badgeVariant(st.state)}`}>
+              {statusLabel(st.state)}
+            </span>
+          </div>
+        )}
+        {running && (
+          <div className="progress">
+            <div
+              className="progress-fill"
+              style={{ width: `${st!.progress}%` }}
+            />
+          </div>
+        )}
+        <div className="card-actions">
+          <div className="cal-action-group">
+            <button
+              className="btn btn-primary"
+              disabled={running}
+              onClick={() => void store.sendCommand(Command.CalibrateImu)}
+            >
+              Calibrate IMU
+            </button>
+            <p className="cal-hint">
+              Use when the cursor drifts slowly while the glove is flat on the
+              table — that's the gyro zero-rate offset accumulating.
+            </p>
+          </div>
+          <div className="cal-action-group">
+            <button
+              className="btn btn-secondary"
+              disabled={running}
+              onClick={() => void store.sendCommand(Command.RecalibrateTouch)}
+            >
+              Recalibrate touch baseline
+            </button>
+            <p className="cal-hint">
+              Use when touch detection becomes unreliable after putting the
+              glove on, or after temperature changes affect the thumb pad.
+            </p>
+          </div>
+        </div>
+      </Section>
+
       <Section
         title="IMU — live"
         action={<span className="hz-badge">{s.telemetryHz} Hz</span>}
@@ -35,43 +87,6 @@ function CalibrateBody() {
           <StatBox label="GYRO Y" value={dps(t?.gyro[1])} />
           <StatBox label="GYRO Z" value={dps(t?.gyro[2])} />
         </StatGrid>
-      </Section>
-
-      <Section title="Procedure">
-        <ol className="steps steps-numbered">
-          <li>Place the glove flat on a table.</li>
-          <li>Hold still for 3 seconds.</li>
-          <li>Tap Calibrate IMU below.</li>
-        </ol>
-        {st && (
-          <>
-            <Row label={opcodeLabel(st.lastOpcode)} value={statusLabel(st.state)} />
-            {running && (
-              <div className="progress">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${st.progress}%` }}
-                />
-              </div>
-            )}
-          </>
-        )}
-        <div className="card-actions">
-          <button
-            className="btn btn-primary"
-            disabled={running}
-            onClick={() => void store.sendCommand(Command.CalibrateImu)}
-          >
-            Calibrate IMU
-          </button>
-          <button
-            className="btn btn-secondary"
-            disabled={running}
-            onClick={() => void store.sendCommand(Command.RecalibrateTouch)}
-          >
-            Recalibrate touch baseline
-          </button>
-        </div>
       </Section>
     </>
   );
@@ -94,13 +109,18 @@ function opcodeLabel(op: number): string {
 }
 function statusLabel(state: StatusState): string {
   switch (state) {
-    case StatusState.Running:
-      return "Running…";
-    case StatusState.Success:
-      return "Success";
-    case StatusState.Fail:
-      return "Failed";
-    default:
-      return "Idle";
+    case StatusState.Running: return "Running…";
+    case StatusState.Success: return "Success";
+    case StatusState.Fail:    return "Failed";
+    default:                  return "Idle";
+  }
+}
+
+function badgeVariant(state: StatusState): string {
+  switch (state) {
+    case StatusState.Running: return "running";
+    case StatusState.Success: return "success";
+    case StatusState.Fail:    return "fail";
+    default:                  return "idle";
   }
 }
