@@ -192,13 +192,13 @@ function LoadingRing() {
 
 /* ── Scene ────────────────────────────────────────────────────────────── */
 interface SceneProps {
-  selected: number;
+  visualSel: number | null;
   onSelect: (pad: number) => void;
   touch: [number, number, number, number];
   thresholds: [number, number, number, number];
 }
 
-function HandScene({ selected, onSelect, touch, thresholds }: SceneProps) {
+function HandScene({ visualSel, onSelect, touch, thresholds }: SceneProps) {
   const [hovered, setHovered] = useState<number | null>(null);
   return (
     <>
@@ -211,7 +211,7 @@ function HandScene({ selected, onSelect, touch, thresholds }: SceneProps) {
       <Bounds fit clip observe margin={1.1}>
         <Suspense fallback={<LoadingRing />}>
           <HandModel
-            selected={selected}
+            selected={visualSel ?? -1}
             hovered={hovered}
             touch={touch}
             thresholds={thresholds}
@@ -228,6 +228,7 @@ function HandScene({ selected, onSelect, touch, thresholds }: SceneProps) {
         minPolarAngle={Math.PI * 0.15}
         maxPolarAngle={Math.PI * 0.75}
       />
+
     </>
   );
 }
@@ -248,6 +249,13 @@ export function HandMap3D({
   touch = [0, 0, 0, 0],
   thresholds = [600, 600, 600, 600],
 }: HandMap3DProps) {
+  const [visualSel, setVisualSel] = useState<number | null>(selected);
+
+  function handleSelect(pad: number) {
+    setVisualSel(pad);
+    onSelect(pad);
+  }
+
   return (
     <div className="hand3d-root">
       <div className="hand3d-canvas">
@@ -255,10 +263,11 @@ export function HandMap3D({
           camera={{ position: [0, 0, 5], fov: 45 }}
           gl={{ antialias: true, alpha: true }}
           style={{ background: "transparent" }}
+          onPointerMissed={() => setVisualSel(null)}
         >
           <HandScene
-            selected={selected}
-            onSelect={onSelect}
+            visualSel={visualSel}
+            onSelect={handleSelect}
             touch={touch}
             thresholds={thresholds}
           />
