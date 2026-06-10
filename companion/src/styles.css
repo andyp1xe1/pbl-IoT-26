@@ -12,8 +12,9 @@
   --good: #4cb583;
   --danger: #cc4d50;
   --warn: #d99a3a;
-  --radius: 22px;
-  --radius-sm: 14px;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
   --shadow: 0 6px 22px rgba(74, 92, 160, 0.07);
   --font-display: "Unbounded", "Inter", system-ui, sans-serif;
   --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -234,6 +235,32 @@ body {
   align-items: start;
 }
 
+/* Calibrate screen: Procedure on the left, live readouts (IMU then
+ * Touch, stacked) on the right. Wraps to a single column on narrow
+ * widths so neither side gets crushed. */
+.cal-layout {
+  display: flex;
+  flex-direction: row;
+  gap: 22px;
+  align-items: flex-start;
+}
+.cal-layout > .cal-procedure {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.cal-layout > .cal-live-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+@media (max-width: 899px) {
+  .cal-layout {
+    flex-direction: column;
+  }
+}
+
 /* Tune screen: three full-width stacked sections.
  *   1. Controls strip (dead zone + debounce on one compact row)
  *   2. Motion-mix matrix (the hero)
@@ -267,13 +294,14 @@ body {
  * default two-line slider-row. Tightens vertical sprawl up top. */
 .tune-controls-card {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr minmax(auto, 0.85fr);
 }
+/* Single-line flex row: label | slider | value. flex-wrap defaults to nowrap
+ * so the slider can never push to a second line — it just shrinks. */
 .tune-controls-card > .slider-row {
-  display: grid;
-  grid-template-columns: minmax(80px, auto) minmax(0, 1fr) minmax(56px, auto);
+  display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   padding: 18px 22px;
   border-bottom: none;
 }
@@ -283,21 +311,38 @@ body {
 .tune-controls-card .slider-head {
   display: contents;
 }
-.tune-controls-card .slider-head .row-label {
+.tune-controls-card .slider-head .row-label,
+.tune-controls-card .knob-row > .row-label {
   font-size: 14px;
   font-weight: 600;
+  flex: 0 0 auto;
 }
-.tune-controls-card .slider-head .row-value {
+.tune-controls-card .slider-head .row-value,
+.tune-controls-card .knob-row > .row-value {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-size: 13px;
   color: var(--accent);
   font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  order: 3;
 }
-.tune-controls-card .slider-row > input[type="range"] {
+.tune-controls-card > .slider-row > input[type="range"] {
+  flex: 1 1 0;
+  min-width: 0;
+  order: 2;
   margin: 0;
 }
-@media (max-width: 599px) {
+.tune-controls-card > .knob-row {
+  padding: 10px 22px;
+  grid-template-columns: minmax(80px, auto) auto minmax(56px, auto);
+  justify-content: space-between;
+}
+.tune-controls-card > .knob-row .rotary-knob {
+  justify-self: center;
+}
+@media (max-width: 749px) {
   .tune-controls-card {
     grid-template-columns: 1fr;
   }
@@ -319,12 +364,21 @@ body {
 }
 
 .mix-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 24px;
+  column-gap: 24px;
+  row-gap: 10px;
   padding: 14px 22px;
   border-bottom: 1px solid var(--border);
+}
+.mix-header > .mix-beta-inline {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.mix-header > .motion-mix-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .mix-beta-inline {
@@ -367,6 +421,57 @@ body {
   white-space: nowrap;
 }
 
+/* ── Rotary knob ── */
+
+.rotary-knob {
+  --fill: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: color-mix(
+    in oklab,
+    var(--accent) calc(var(--fill) * 100%),
+    var(--surface)
+  );
+  border: 2px solid var(--accent-hover);
+  position: relative;
+  cursor: ns-resize;
+  flex-shrink: 0;
+  touch-action: none;
+  user-select: none;
+  transition: background-color 0.08s linear;
+}
+.rotary-knob:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.rotary-knob-dial {
+  position: absolute;
+  inset: 0;
+  transform: rotate(var(--angle, 0deg));
+  transition: transform 0.06s linear;
+}
+/* Dark core + white halo so the tick stays readable across the full fill
+ * range — solid against the white empty state, haloed against the dark
+ * fully-on state, and contrasts cleanly through the mid-fill tween. */
+.rotary-knob-tick {
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 3px;
+  height: 12px;
+  /* Stay accent-hover up to 0.75, then ramp to white by 1.0 so the tick
+   * doesn't muddy against the deep accent fill at the top of the range. */
+  background: color-mix(
+    in oklab,
+    #fff calc(max(0%, (var(--fill) - 0.75) * 400%)),
+    var(--accent-hover)
+  );
+  border-radius: 2px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.92);
+}
+
 .mix-card {
   padding: 0;
 }
@@ -374,8 +479,8 @@ body {
   padding: 18px 22px 24px;
 }
 
-/* Shared 3-column template used by both the col-head and each band's row grid */
-.mix-col-head,
+/* Shared 3-column template used by the band header and each band's row grid */
+.mix-band-header,
 .mix-band-rows {
   display: grid;
   grid-template-columns: minmax(120px, 0.4fr) minmax(0, 1fr) minmax(0, 1fr);
@@ -386,13 +491,12 @@ body {
 .mix-grid {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
-/* Column header labels */
-.mix-col-head {
-  padding: 0 0 2px;  /* no horizontal padding — same column widths as band-rows */
-}
+/* Column-axis labels live inside the band header, sharing the row with the
+ * band's group label (RAW IMU / FUSED). Tinted to match the band-header
+ * accent so they read as part of the same heading strip. */
 .mix-col-label {
   display: flex;
   align-items: center;
@@ -402,7 +506,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: #5e6ad2;
   /* offset right by the bipolar value column (56px) + its gap (12px) so the
      label centres over the slider track rather than the full column */
   padding-right: 68px;
@@ -410,13 +514,13 @@ body {
 
 /* Band cards — each group in its own card */
 .mix-band {
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .mix-band-header {
   background: #eceefb;
-  padding: 7px 14px;
+  padding: 11px 0;
   border-bottom: 1px solid rgba(94, 106, 210, 0.18);
 }
 
@@ -427,6 +531,7 @@ body {
   letter-spacing: 0.07em;
   color: #5e6ad2;
   text-transform: uppercase;
+  padding-inline: 18px;
 }
 
 .mix-group-hint {
@@ -443,7 +548,7 @@ body {
 }
 
 .mix-band-rows {
-  padding: 0 0 6px; /* 6px bottom gap so last row breathes the same as the sides */
+  padding: 8px 0 6px; /* 8px top to breathe from the header strip, 6px bottom to match side margins */
 }
 
 .mix-row {
@@ -492,8 +597,8 @@ body {
 .bipolar-track {
   position: relative;
   width: 100%;
-  height: 6px;
-  border-radius: 999px;
+  height: 9px;
+  border-radius: 5px;
   background: var(--border);
   overflow: visible;
 }
@@ -504,8 +609,8 @@ body {
   bottom: 0;
   left: var(--bp-fill-start);
   right: calc(100% - var(--bp-fill-end));
-  background: var(--accent);
-  border-radius: 999px;
+  background: #5e6ad2;
+  border-radius: 5px;
   transition: left 0.06s linear, right 0.06s linear;
 }
 
@@ -556,9 +661,9 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.20);
+  background: #5e6ad2;
+  border: none;
+  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.30);
   margin-top: 2px; /* center on 22px track: -(18/2 - 22/2) = +2px */
   cursor: ew-resize;
 }
@@ -566,9 +671,9 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.20);
+  background: #5e6ad2;
+  border: none;
+  box-shadow: 0 1px 4px rgba(74, 92, 160, 0.30);
   cursor: ew-resize;
 }
 
@@ -576,10 +681,12 @@ body {
   background: transparent;
 }
 .bipolar-zero input[type="range"]::-webkit-slider-thumb {
-  border-color: var(--muted);
+  background: var(--muted);
+  opacity: 0.6;
 }
 .bipolar-zero input[type="range"]::-moz-range-thumb {
-  border-color: var(--muted);
+  background: var(--muted);
+  opacity: 0.6;
 }
 
 .bipolar-value {
@@ -624,14 +731,14 @@ body {
  * monospaced pill so it reads as instrumentation, not chrome. */
 .hz-badge {
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 2px 8px;
-  border-radius: 999px;
-  letter-spacing: 0.02em;
+  background: transparent;
+  border: none;
+  padding: 0;
 }
 
 .section-footer {
@@ -791,8 +898,8 @@ body {
 .card-actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
+  gap: 12px;
+  padding: 20px 22px;
   border-top: 1px solid var(--border);
 }
 
@@ -802,6 +909,34 @@ body {
   gap: 6px;
 }
 
+/* Thin progress strip below the running calibration's button. Lives in the
+ * same column as the button + hint so it reads as part of that action,
+ * not a floating status bar somewhere on the screen. */
+.cal-action-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.cal-action-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.12s linear;
+}
+
+/* Outcome line — separate from .cal-hint so the description text never
+ * gets reused as a status string. Sits between the button (or progress
+ * strip) and the hint paragraph. */
+.cal-action-status {
+  margin: 0;
+  padding: 0 4px 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.cal-action-status--success { color: var(--accent); }
+.cal-action-status--fail    { color: var(--danger); }
+
 .cal-hint {
   margin: 0;
   padding: 3px 4px 3px 10px;
@@ -809,6 +944,45 @@ body {
   line-height: 1.55;
   color: var(--muted);
   border-left: 2px solid var(--border);
+}
+
+/* Per-finger live touch readouts on the Calibrate screen. One compact row
+ * per finger — name | live bar | value — matching the Tune slider-row
+ * rhythm so the two screens read as one family. */
+.cal-touch-grid {
+  display: flex;
+  flex-direction: column;
+}
+.cal-touch-row {
+  display: grid;
+  grid-template-columns: minmax(64px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.cal-touch-row:last-child {
+  border-bottom: none;
+}
+.cal-touch-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+/* TouchBar lives inside the row; kill its own padding/label width so the
+ * outer grid controls the layout. */
+.cal-touch-row > .touch-row {
+  padding: 0;
+  gap: 12px;
+  min-width: 0;
+}
+.cal-touch-row .touch-label {
+  display: none;
+}
+.cal-touch-row .touch-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
 }
 
 .btn {
@@ -892,10 +1066,10 @@ body {
   list-style: none;
   counter-reset: cal-step;
   margin: 0;
-  padding: 16px;
+  padding: 20px 22px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .cal-steps li {
@@ -921,47 +1095,6 @@ body {
   align-items: center;
   justify-content: center;
   margin-top: 1px;
-}
-
-.cal-status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border-top: 1px solid var(--border);
-}
-
-.cal-status-label {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.cal-status-badge {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  padding: 3px 9px;
-  border-radius: 999px;
-}
-
-.cal-status-badge--idle {
-  background: var(--surface-2);
-  color: var(--muted);
-}
-
-.cal-status-badge--running {
-  background: var(--accent-weak);
-  color: var(--accent);
-}
-
-.cal-status-badge--success {
-  background: #e6f7ef;
-  color: var(--good);
-}
-
-.cal-status-badge--fail {
-  background: #fdeaea;
-  color: var(--danger);
 }
 
 /* ---------- Sliders ---------- */
@@ -1121,9 +1254,9 @@ input[type="range"]:disabled {
 .buttons-col-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: #5e6ad2;
 }
 .buttons-col-label:last-of-type {
   padding-left: 6px;
@@ -1221,7 +1354,7 @@ input[type="range"]:disabled {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 14px;
+  padding: 18px 20px;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
@@ -1263,7 +1396,7 @@ input[type="range"]:disabled {
   height: 6px;
   background: var(--surface-2);
   border-radius: 3px;
-  margin: 4px 16px 14px;
+  margin: 4px 22px 16px;
   overflow: hidden;
 }
 
@@ -1275,225 +1408,168 @@ input[type="range"]:disabled {
 
 /* ---------- About screen ---------- */
 
+/* Centred hero treatment, mirroring Home: vertically anchor the title +
+ * description + clusters as one cluster floating in the middle of the
+ * viewport, with the screen-head riding above. */
+.screen:has(.about-layout) {
+  min-height: calc(100vh - 200px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.screen:has(.about-layout) .screen-head {
+  margin: 4px 4px 24px;
+  text-align: center;
+}
+
+.screen:has(.about-layout) .screen-title {
+  font-size: clamp(28px, 3.6vw, 40px);
+}
+
 .about-layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "hero"
-    "team"
-    "device"
-    "links";
-  gap: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
 }
 
 .about-hero {
-  grid-area: hero;
+  padding: 4px 4px 0;
+  text-align: center;
+}
+
+.about-hero-desc {
+  margin: 0 auto;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--muted);
+  max-width: 60ch;
+  text-align: justify;
+  text-align-last: left;
+}
+
+.about-hero-desc strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* Link cluster mirrors the team cloud: round icon-orbs with a name baseline
+ * underneath. Same 84 px circle, same 10 px name gap, just an icon inside
+ * instead of an avatar photo. */
+.about-link-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 14px 22px;
+  padding: 18px 14px 24px;
+}
+
+.about-link-orb {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding: 24px 16px 16px;
-  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s ease;
 }
 
-.about-hero-name {
-  font-family: var(--font-display);
-  font-size: 42px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--accent);
-  line-height: 1;
-}
-
-.about-hero-version {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  padding: 3px 10px;
-  border-radius: 999px;
-}
-
-.about-hero-desc {
-  margin: 4px 0 0;
-  font-size: 14px;
-  line-height: 1.65;
-  color: var(--muted);
-  max-width: 400px;
-}
-
-/* ── Team grid ── */
-
-.about-section-team   { grid-area: team; }
-.about-section-device { grid-area: device; }
-.about-section-links  { grid-area: links; }
-
-.about-team-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-}
-
-.about-member-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
-}
-
-.about-member-avatar {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+.about-link-orb-icon {
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
   background: var(--accent-weak);
   color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  border: 4px solid var(--surface);
+  box-shadow: 0 10px 26px rgba(30, 34, 90, 0.14);
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.15s ease;
 }
 
-.about-member-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-}
-
-/* ── Link cards ── */
-
-.about-links-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-}
-
-.about-link-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  text-decoration: none;
-  color: var(--text);
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
-  transition: background 0.15s;
-}
-
-.about-link-card:hover {
-  background: var(--accent-weak);
-}
-
-.about-link-card-icon {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--accent-weak);
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.about-link-card-text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.about-link-card-label {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.about-link-card-url {
+.about-link-orb-name {
   font-size: 12px;
+  font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
 }
 
-/* ── Device cards ── */
-
-.about-device-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
+.about-link-orb:hover {
+  transform: translateY(-4px);
 }
 
-.about-device-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
+.about-link-orb:hover .about-link-orb-icon {
+  background: #e0e6fd;
 }
 
-.about-device-label {
-  font-size: 14px;
-  font-weight: 500;
+.about-link-orb:hover .about-link-orb-name {
   color: var(--text);
 }
 
-.about-device-value {
-  font-size: 13px;
-  color: var(--muted);
+/* Team cluster: avatars are chaotically y-offset, but the names share a
+ * single baseline so the row reads as one cohesive caption strip beneath
+ * a scattered avatar band. */
+.about-team-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 14px 22px;
+  padding: 40px 14px 18px;
 }
 
-.about-device-reset {
-  margin-top: 4px;
-  width: 100%;
-  padding: 11px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: #fde8e8;
-  color: var(--danger);
-  font-size: 14px;
+.about-team-orb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s ease;
+}
+
+.about-team-orb-avatar-wrap {
+  display: block;
+}
+
+.about-team-orb-avatar {
+  display: block;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid var(--surface);
+  box-shadow: 0 10px 26px rgba(30, 34, 90, 0.14);
+  background: var(--surface);
+}
+
+.about-team-orb-name {
+  font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
-.about-device-reset:hover {
-  background: #f9d0d0;
+.about-team-orb:hover .about-team-orb-name {
+  color: var(--text);
 }
 
-/* ── Responsive grid ── */
+/* Per-orb chaos applied to the whole orb so the avatar↔name gap stays
+ * a uniform 10 px inside every orb, matching .about-link-orb. */
+.about-team-orb-1 { transform: translateY(-4px);  }
+.about-team-orb-2 { transform: translateY(10px);  }
+.about-team-orb-3 { transform: translateY(-12px); }
+.about-team-orb-4 { transform: translateY(6px);   }
+.about-team-orb-5 { transform: translateY(-2px);  }
 
-@media (min-width: 640px) {
-  .about-layout {
-    grid-template-columns: 1fr 1fr;
-    grid-template-areas:
-      "hero   hero"
-      "team   device"
-      "links  links";
-    gap: 0 16px;
-  }
-}
-
-@media (min-width: 900px) {
-  .about-layout {
-    grid-template-columns: 1fr 1fr 1fr;
-    grid-template-areas:
-      "hero   hero    hero"
-      "team   device  links";
-    gap: 0 20px;
-  }
-
-  .about-hero {
-    padding: 32px 24px 16px;
-  }
-}
+.about-team-orb-1:hover { transform: translateY(-8px);  }
+.about-team-orb-2:hover { transform: translateY(6px);   }
+.about-team-orb-3:hover { transform: translateY(-16px); }
+.about-team-orb-4:hover { transform: translateY(2px);   }
+.about-team-orb-5:hover { transform: translateY(-6px);  }
 
 /* ---------- Desktop ---------- */
 
@@ -1699,9 +1775,15 @@ input[type="range"]:disabled {
 /* Forget button: full-width to match the switches/info cards on either
  * side of it, so the stack reads as a uniform column rather than a
  * floating pill between two cards. */
-.device-forget {
+.device-danger-row {
+  display: flex;
+  gap: 10px;
   width: 100%;
   margin: 2px 0;
+}
+.device-danger-row > .btn {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 /* Pair-device CTA: the only control on the unpaired screen, so it stands
@@ -1870,7 +1952,7 @@ input[type="range"]:disabled {
   width: 100%;
   flex: 1;
   min-height: 340px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border, #e3e6f1);
   background: radial-gradient(ellipse at 50% 35%, #f4f5ff 0%, #edf0fa 100%);
@@ -1890,7 +1972,7 @@ input[type="range"]:disabled {
   font-size: 13px;
   font-weight: 600;
   text-align: center;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1.5px solid var(--border, #e3e6f1);
   background: var(--surface, #fff);
   color: var(--muted, #9398ae);
@@ -1978,8 +2060,8 @@ input[type="range"]:disabled {
 .click-map-detail-body {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 18px 0 20px;
+  gap: 16px;
+  padding: 14px 0 16px;
 }
 
 .click-map-field {
@@ -1996,17 +2078,31 @@ input[type="range"]:disabled {
   gap: 12px;
 }
 
+/* Same blue eyebrow token as .mix-group-label — used for in-card sub-heads
+ * (MODIFIER FINGER, TOUCH THRESHOLD, etc.) so they share the language with
+ * the band headers in Motion mix. */
 .click-map-field-label {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.10em;
-  color: var(--muted, #9398ae);
+  letter-spacing: 0.07em;
+  color: #5e6ad2;
   margin-bottom: 10px;
   display: block;
 }
 
 /* tab strip above the action grid (visible only when modifier is set) */
+
+/* Reserved-height slot so the panel doesn't grow/shrink when a modifier
+ * finger is added or removed. When no modifier is set the tabs render
+ * but greyed out; the inline disabled rule on .click-map-action-tab
+ * dims the buttons. */
+.click-map-tabs-slot {
+  display: block;
+}
+.click-map-tabs-slot--disabled .click-map-modifier-hint {
+  opacity: 0.6;
+}
 
 .click-map-action-tabs {
   display: flex;
@@ -2014,7 +2110,7 @@ input[type="range"]:disabled {
   margin-bottom: 12px;
   background: var(--surface-2, #f4f6fc);
   border: 1px solid var(--border, #e3e6f1);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 4px;
 }
 
@@ -2025,7 +2121,7 @@ input[type="range"]:disabled {
   font-weight: 600;
   font-family: var(--font-ui);
   border: none;
-  border-radius: 9px;
+  border-radius: calc(var(--radius-sm) - 3px);
   background: transparent;
   color: var(--muted, #9398ae);
   cursor: pointer;
@@ -2033,7 +2129,7 @@ input[type="range"]:disabled {
   white-space: nowrap;
 }
 
-.click-map-action-tab:hover {
+.click-map-action-tab:hover:not(:disabled) {
   background: var(--surface, #fff);
   color: var(--text, #2b2f3c);
 }
@@ -2042,6 +2138,11 @@ input[type="range"]:disabled {
   background: var(--surface, #fff);
   color: #4b56bd;
   box-shadow: 0 1px 4px rgba(94, 106, 210, 0.14);
+}
+
+.click-map-action-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .click-map-modifier-hint {
@@ -2062,7 +2163,7 @@ input[type="range"]:disabled {
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2, #f4f6fc);
   border: 1.5px dashed var(--border, #e3e6f1);
   font-size: 13px;
@@ -2106,7 +2207,7 @@ input[type="range"]:disabled {
   font-size: 13px;
   font-weight: 500;
   font-family: var(--font-ui);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   border: 1.5px solid var(--border, #e3e6f1);
   background: var(--surface, #fff);
   color: #565d75;
@@ -2153,18 +2254,15 @@ input[type="range"]:disabled {
 
 /* threshold sub-row */
 
-/* shared badge — sits to the right of both the slider row and the live bar */
+/* Plain accent numeric — same family as .bipolar-value / .slider-head .row-value */
 .click-map-thresh-value {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  background: #eceefb;
-  color: #5e6ad2;
-  padding: 3px 10px;
-  border-radius: 8px;
+  color: var(--accent);
   flex-shrink: 0;
   min-width: 44px;
-  text-align: center;
+  text-align: right;
 }
 
 /* inline row: [track] [badge] — mirrors .touch-row layout */
@@ -2181,17 +2279,6 @@ input[type="range"]:disabled {
   margin: 0;
 }
 
-.click-map-thresh-live {
-  font-size: 12px;
-  color: var(--muted, #9398ae);
-  font-variant-numeric: tabular-nums;
-}
-
-.click-map-thresh-live--scored {
-  color: #5e6ad2;
-  font-weight: 600;
-}
-
 /* TouchBar inside click-map threshold — matches the visual style of the
  * threshold slider row above it (same badge, same track weight). */
 .click-map-field .touch-row {
@@ -2205,14 +2292,11 @@ input[type="range"]:disabled {
 .click-map-field .touch-value {
   width: auto;
   min-width: 44px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 700;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  background: #eceefb;
-  color: #5e6ad2;
-  padding: 3px 10px;
-  border-radius: 8px;
+  color: var(--accent);
   flex-shrink: 0;
 }
 .click-map-field .touch-track {
