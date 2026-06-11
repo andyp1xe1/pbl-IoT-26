@@ -19,10 +19,10 @@ const MODEL_PATH = "/hand.glb";
 
 /** Slot → mesh name, in PAD_NAMES order. Thumb mesh is unmapped. */
 const FINGER_MESH_NAMES: Record<number, string[]> = {
-  0: ["Circle003_4"], // Pinky
-  1: ["Circle003_1"], // Index
-  2: ["Circle003_3"], // Ring
-  3: ["Circle003_2"], // Middle
+  0: ["Circle003_1"], // Index
+  1: ["Circle003_3"], // Ring
+  2: ["Circle003_2"], // Middle
+  3: ["Circle003_4"], // Pinky
 };
 
 /** Click any mesh while this is true to log its name to the console. */

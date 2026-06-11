@@ -30,10 +30,10 @@ export const ALT_FORBIDDEN: ReadonlySet<ClickAction> = new Set([
 export const NO_MODIFIER = 0xff;
 
 /** Wire-slot order — must mirror firmware `touch_pad_id_t`. */
-export const PAD_NAMES: readonly string[] = ["Pinky", "Index", "Ring", "Middle"];
+export const PAD_NAMES: readonly string[] = ["Index", "Ring", "Middle", "Pinky"];
 
 /** Slot indices in anatomical left-to-right order — iterate this in UI. */
-export const PAD_DISPLAY_ORDER: readonly number[] = [1, 3, 2, 0];
+export const PAD_DISPLAY_ORDER: readonly number[] = [0, 2, 1, 3];
 
 /** Motion-mix input axes — cursor-eligible signals only. Order is
  *  wire-stable; extending it requires a config schema bump. The Y-axis lanes
@@ -196,7 +196,7 @@ export function defaultConfig(): AgConfig {
     madgwickBetaMilli: 145,
     debounceMs: 15,
     touchThreshold: [20, 20, 20, 20],
-    /* Slot order [Pinky, Index, Ring, Middle]. */
+    /* Slot order [Index, Ring, Middle, Pinky]. */
     clickAction: [
       ClickAction.None,
       ClickAction.Left,
